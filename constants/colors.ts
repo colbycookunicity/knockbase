@@ -1,12 +1,55 @@
-// template
-const tintColorLight = "#2f95dc";
-
-export default {
+const Colors = {
   light: {
-    text: "#000",
-    background: "#fff",
-    tint: tintColorLight,
-    tabIconDefault: "#ccc",
-    tabIconSelected: tintColorLight,
+    text: "#0F1923",
+    textSecondary: "#5A6B7B",
+    background: "#F5F7FA",
+    surface: "#FFFFFF",
+    surfaceElevated: "#FFFFFF",
+    tint: "#10B981",
+    tintDark: "#059669",
+    accent: "#3B82F6",
+    accentSecondary: "#8B5CF6",
+    border: "#E2E8F0",
+    borderLight: "#F1F5F9",
+    tabIconDefault: "#94A3B8",
+    tabIconSelected: "#10B981",
+    danger: "#EF4444",
+    warning: "#F59E0B",
+    success: "#10B981",
+    info: "#3B82F6",
+    cardShadow: "rgba(15, 25, 35, 0.08)",
+  },
+  dark: {
+    text: "#F1F5F9",
+    textSecondary: "#94A3B8",
+    background: "#0F1923",
+    surface: "#1A2736",
+    surfaceElevated: "#243447",
+    tint: "#34D399",
+    tintDark: "#10B981",
+    accent: "#60A5FA",
+    accentSecondary: "#A78BFA",
+    border: "#2D3F52",
+    borderLight: "#1E3044",
+    tabIconDefault: "#64748B",
+    tabIconSelected: "#34D399",
+    danger: "#F87171",
+    warning: "#FBBF24",
+    success: "#34D399",
+    info: "#60A5FA",
+    cardShadow: "rgba(0, 0, 0, 0.3)",
+  },
+  status: {
+    untouched: "#94A3B8",
+    notHome: "#F59E0B",
+    notInterested: "#EF4444",
+    callback: "#3B82F6",
+    appointment: "#8B5CF6",
+    sold: "#10B981",
+    followUp: "#06B6D4",
   },
 };
+
+export default Colors;
+
+export type ColorScheme = typeof Colors.light;
