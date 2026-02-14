@@ -1,19 +1,21 @@
 import React, { forwardRef } from "react";
-import MapView, { Marker, Region } from "react-native-maps";
-import { Lead } from "@/lib/types";
+import MapView, { Marker, Polygon, Region } from "react-native-maps";
+import { Lead, Territory } from "@/lib/types";
 import { MapPinMarker } from "./MapPinMarker";
 
 interface NativeMapProps {
   initialRegion: Region;
   locationPermission: boolean;
   leads: Lead[];
+  territories?: Territory[];
   selectedLeadId: string | null;
   onMarkerPress: (lead: Lead) => void;
   onLongPress: (e: any) => void;
+  showTerritories?: boolean;
 }
 
 export const NativeMap = forwardRef<MapView, NativeMapProps>(function NativeMap(
-  { initialRegion, locationPermission, leads, selectedLeadId, onMarkerPress, onLongPress },
+  { initialRegion, locationPermission, leads, territories = [], selectedLeadId, onMarkerPress, onLongPress, showTerritories = true },
   ref
 ) {
   return (
@@ -25,6 +27,17 @@ export const NativeMap = forwardRef<MapView, NativeMapProps>(function NativeMap(
       showsMyLocationButton={false}
       onLongPress={onLongPress}
     >
+      {showTerritories && territories.map((territory) =>
+        territory.points.length >= 3 ? (
+          <Polygon
+            key={territory.id}
+            coordinates={territory.points}
+            fillColor={territory.color + "25"}
+            strokeColor={territory.color}
+            strokeWidth={2}
+          />
+        ) : null
+      )}
       {leads.map((lead) => (
         <Marker
           key={lead.id}

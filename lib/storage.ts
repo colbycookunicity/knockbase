@@ -1,9 +1,10 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Crypto from "expo-crypto";
-import { Lead, DailyStats, LeadStatus } from "./types";
+import { Lead, DailyStats, LeadStatus, Territory } from "./types";
 
 const LEADS_KEY = "@knockbase_leads";
 const STATS_KEY = "@knockbase_stats";
+const TERRITORIES_KEY = "@knockbase_territories";
 
 export async function getLeads(): Promise<Lead[]> {
   const data = await AsyncStorage.getItem(LEADS_KEY);
@@ -107,4 +108,49 @@ export function getStatusCounts(leads: Lead[]): Record<LeadStatus, number> {
     counts[l.status]++;
   });
   return counts;
+}
+
+export async function getTerritories(): Promise<Territory[]> {
+  const data = await AsyncStorage.getItem(TERRITORIES_KEY);
+  return data ? JSON.parse(data) : [];
+}
+
+export async function saveTerritory(
+  territory: Omit<Territory, "id" | "createdAt" | "updatedAt">
+): Promise<Territory> {
+  const territories = await getTerritories();
+  const now = new Date().toISOString();
+  const newTerritory: Territory = {
+    ...territory,
+    id: Crypto.randomUUID(),
+    createdAt: now,
+    updatedAt: now,
+  };
+  territories.push(newTerritory);
+  await AsyncStorage.setItem(TERRITORIES_KEY, JSON.stringify(territories));
+  return newTerritory;
+}
+
+export async function updateTerritory(
+  id: string,
+  updates: Partial<Territory>
+): Promise<Territory | null> {
+  const territories = await getTerritories();
+  const index = territories.findIndex((t) => t.id === id);
+  if (index === -1) return null;
+  territories[index] = {
+    ...territories[index],
+    ...updates,
+    updatedAt: new Date().toISOString(),
+  };
+  await AsyncStorage.setItem(TERRITORIES_KEY, JSON.stringify(territories));
+  return territories[index];
+}
+
+export async function deleteTerritory(id: string): Promise<boolean> {
+  const territories = await getTerritories();
+  const filtered = territories.filter((t) => t.id !== id);
+  if (filtered.length === territories.length) return false;
+  await AsyncStorage.setItem(TERRITORIES_KEY, JSON.stringify(filtered));
+  return true;
 }

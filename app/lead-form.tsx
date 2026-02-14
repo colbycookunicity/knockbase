@@ -25,6 +25,7 @@ export default function LeadFormScreen() {
     id?: string;
     latitude?: string;
     longitude?: string;
+    pickedAddress?: string;
   }>();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -41,7 +42,7 @@ export default function LeadFormScreen() {
   const [lastName, setLastName] = useState(existingLead?.lastName || "");
   const [phone, setPhone] = useState(existingLead?.phone || "");
   const [email, setEmail] = useState(existingLead?.email || "");
-  const [address, setAddress] = useState(existingLead?.address || "");
+  const [address, setAddress] = useState(existingLead?.address || params.pickedAddress || "");
   const [notes, setNotes] = useState(existingLead?.notes || "");
   const [tags, setTags] = useState<string[]>(existingLead?.tags || []);
   const [status, setStatus] = useState<LeadStatus>(existingLead?.status || "untouched");
@@ -57,8 +58,11 @@ export default function LeadFormScreen() {
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
 
-  const latitude = existingLead?.latitude || parseFloat(params.latitude || "0");
-  const longitude = existingLead?.longitude || parseFloat(params.longitude || "0");
+  const [pickedLat, setPickedLat] = useState(existingLead?.latitude || parseFloat(params.latitude || "0"));
+  const [pickedLng, setPickedLng] = useState(existingLead?.longitude || parseFloat(params.longitude || "0"));
+
+  const latitude = pickedLat;
+  const longitude = pickedLng;
 
   const toggleTag = (tag: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -175,6 +179,21 @@ export default function LeadFormScreen() {
           theme={theme}
           icon="map-pin"
         />
+        <Pressable
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            router.push({
+              pathname: "/map-picker",
+              params: latitude !== 0 ? { initialLat: latitude.toString(), initialLng: longitude.toString() } : {},
+            });
+          }}
+          style={[styles.pickMapBtn, { backgroundColor: theme.surface, borderColor: theme.border }]}
+        >
+          <Feather name="crosshair" size={16} color={theme.tint} />
+          <Text style={[styles.pickMapText, { color: theme.tint }]}>
+            {latitude !== 0 ? "Change Pin on Map" : "Pick on Map"}
+          </Text>
+        </Pressable>
         {latitude !== 0 && (
           <Text style={[styles.coordText, { color: theme.textSecondary }]}>
             {latitude.toFixed(5)}, {longitude.toFixed(5)}
@@ -456,6 +475,19 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     marginTop: -4,
     marginLeft: 4,
+  },
+  pickMapBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  pickMapText: {
+    fontSize: 14,
+    fontFamily: "Inter_500Medium",
   },
   statusGrid: {
     flexDirection: "row",

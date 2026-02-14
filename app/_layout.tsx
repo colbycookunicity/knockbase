@@ -14,6 +14,7 @@ import {
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { queryClient } from "@/lib/query-client";
 import { LeadsProvider } from "@/lib/leads-context";
+import { TerritoriesProvider } from "@/lib/territories-context";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -28,6 +29,14 @@ function RootLayoutNav() {
       <Stack.Screen
         name="lead-form"
         options={{ headerShown: false, presentation: "modal" }}
+      />
+      <Stack.Screen
+        name="map-picker"
+        options={{ headerShown: false, presentation: "fullScreenModal" }}
+      />
+      <Stack.Screen
+        name="territory-editor"
+        options={{ headerShown: false, presentation: "fullScreenModal" }}
       />
     </Stack>
   );
@@ -53,11 +62,13 @@ export default function RootLayout() {
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <LeadsProvider>
-          <GestureHandlerRootView>
-            <KeyboardProvider>
-              <RootLayoutNav />
-            </KeyboardProvider>
-          </GestureHandlerRootView>
+          <TerritoriesProvider>
+            <GestureHandlerRootView>
+              <KeyboardProvider>
+                <RootLayoutNav />
+              </KeyboardProvider>
+            </GestureHandlerRootView>
+          </TerritoriesProvider>
         </LeadsProvider>
       </QueryClientProvider>
     </ErrorBoundary>

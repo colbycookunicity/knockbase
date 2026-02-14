@@ -1,10 +1,11 @@
-import React, { useState, useRef, useEffect } from "react";
-import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
+import React, { useState, useRef, useEffect, useMemo } from "react";
+import { View, Text, StyleSheet, Pressable, Platform, ScrollView } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useLeads } from "@/lib/leads-context";
+import { useTerritories } from "@/lib/territories-context";
 import { useTheme } from "@/lib/useTheme";
 import { Lead, LEAD_STATUS_CONFIG, LeadStatus } from "@/lib/types";
 import { DispositionSheet } from "@/components/DispositionSheet";
@@ -24,12 +25,14 @@ export default function MapScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { leads, dispositionLead } = useLeads();
+  const { territories } = useTerritories();
   const mapRef = useRef<any>(null);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [showDisposition, setShowDisposition] = useState(false);
   const [activeFilters, setActiveFilters] = useState<Set<LeadStatus>>(new Set());
   const [locationPermission, setLocationPermission] = useState<boolean | null>(null);
+  const [showTerritories, setShowTerritories] = useState(true);
 
   useEffect(() => {
     (async () => {
@@ -179,6 +182,8 @@ export default function MapScreen() {
           initialRegion={initialRegion}
           locationPermission={!!locationPermission}
           leads={filteredLeads}
+          territories={territories}
+          showTerritories={showTerritories}
           selectedLeadId={selectedLead?.id || null}
           onMarkerPress={handleMarkerPress}
           onLongPress={handleMapLongPress}
@@ -257,10 +262,48 @@ export default function MapScreen() {
             </View>
             <View style={styles.previewActions}>
               <Pressable
+                onPress={() => {
+                  const idx = filteredLeads.findIndex((l) => l.id === selectedLead.id);
+                  const prevLead = filteredLeads[idx > 0 ? idx - 1 : filteredLeads.length - 1];
+                  if (prevLead) {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setSelectedLead(prevLead);
+                    mapRef.current?.animateToRegion({
+                      latitude: prevLead.latitude,
+                      longitude: prevLead.longitude,
+                      latitudeDelta: 0.003,
+                      longitudeDelta: 0.003,
+                    }, 300);
+                  }
+                }}
+                style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1 }]}
+              >
+                <Feather name="chevron-left" size={22} color={theme.textSecondary} />
+              </Pressable>
+              <Pressable
                 onPress={() => setShowDisposition(true)}
                 style={[styles.actionBtn, { backgroundColor: theme.tint }]}
               >
                 <Feather name="edit-3" size={16} color="#FFF" />
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  const idx = filteredLeads.findIndex((l) => l.id === selectedLead.id);
+                  const nextLead = filteredLeads[(idx + 1) % filteredLeads.length];
+                  if (nextLead) {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setSelectedLead(nextLead);
+                    mapRef.current?.animateToRegion({
+                      latitude: nextLead.latitude,
+                      longitude: nextLead.longitude,
+                      latitudeDelta: 0.003,
+                      longitudeDelta: 0.003,
+                    }, 300);
+                  }
+                }}
+                style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1 }]}
+              >
+                <Feather name="chevron-right" size={22} color={theme.textSecondary} />
               </Pressable>
               <Pressable
                 onPress={() => setSelectedLead(null)}
@@ -275,6 +318,23 @@ export default function MapScreen() {
 
       {!isWeb && (
         <View style={[styles.mapControls, { bottom: bottomOffset }]}>
+          {territories.length > 0 && (
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setShowTerritories(!showTerritories);
+              }}
+              style={[styles.mapBtn, { backgroundColor: showTerritories ? theme.tint : theme.surface }]}
+            >
+              <Feather name="layers" size={20} color={showTerritories ? "#FFF" : theme.tint} />
+            </Pressable>
+          )}
+          <Pressable
+            onPress={() => router.push("/territory-editor")}
+            style={[styles.mapBtn, { backgroundColor: theme.surface }]}
+          >
+            <Feather name="hexagon" size={20} color={theme.tint} />
+          </Pressable>
           <Pressable
             onPress={handleCenterOnUser}
             style={[styles.mapBtn, { backgroundColor: theme.surface }]}

@@ -49,3 +49,29 @@ export interface DailyStats {
   notInterested: number;
   callbacks: number;
 }
+
+export interface Coordinate {
+  latitude: number;
+  longitude: number;
+}
+
+export const TERRITORY_COLORS = [
+  "#3B82F6",
+  "#10B981",
+  "#F59E0B",
+  "#EF4444",
+  "#8B5CF6",
+  "#06B6D4",
+  "#EC4899",
+  "#F97316",
+];
+
+export interface Territory {
+  id: string;
+  name: string;
+  color: string;
+  points: Coordinate[];
+  assignedRep: string;
+  createdAt: string;
+  updatedAt: string;
+}
