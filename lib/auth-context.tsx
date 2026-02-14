@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, ReactNode } from "react";
+import React, { createContext, useContext, useMemo, useCallback, ReactNode } from "react";
 import { apiRequest, getQueryFn, queryClient } from "./query-client";
 import { useQuery, useMutation } from "@tanstack/react-query";
 
@@ -6,7 +6,8 @@ export interface User {
   id: string;
   username: string;
   fullName: string;
-  role: "admin" | "sales_rep";
+  role: "admin" | "manager" | "sales_rep";
+  managerId: string | null;
   email: string;
   phone: string;
   isActive: string;
@@ -19,6 +20,8 @@ interface AuthContextValue {
   isLoading: boolean;
   isAuthenticated: boolean;
   isAdmin: boolean;
+  isManager: boolean;
+  canManageUsers: boolean;
   login: (username: string, password: string) => Promise<User>;
   logout: () => Promise<void>;
 }
@@ -26,7 +29,7 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const { data: user, isLoading, refetch } = useQuery<User | null>({
+  const { data: user, isLoading } = useQuery<User | null>({
     queryKey: ["/api/auth/me"],
     queryFn: getQueryFn({ on401: "returnNull" }),
     staleTime: Infinity,
@@ -68,6 +71,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading,
       isAuthenticated: !!user,
       isAdmin: user?.role === "admin",
+      isManager: user?.role === "manager",
+      canManageUsers: user?.role === "admin" || user?.role === "manager",
       login,
       logout,
     }),

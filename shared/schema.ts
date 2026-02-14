@@ -11,6 +11,7 @@ export const users = pgTable("users", {
   password: text("password").notNull(),
   fullName: text("full_name").notNull().default(""),
   role: text("role").notNull().default("sales_rep"),
+  managerId: varchar("manager_id"),
   email: text("email").notNull().default(""),
   phone: text("phone").notNull().default(""),
   isActive: text("is_active").notNull().default("true"),
@@ -57,6 +58,7 @@ export const insertUserSchema = createInsertSchema(users).pick({
   password: true,
   fullName: true,
   role: true,
+  managerId: true,
   email: true,
   phone: true,
 });

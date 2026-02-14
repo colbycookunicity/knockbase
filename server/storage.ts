@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, inArray, or } from "drizzle-orm";
 import { db } from "./db";
 import { users, leads, territories, type InsertUser, type User } from "@shared/schema";
 import bcrypt from "bcryptjs";
@@ -26,6 +26,21 @@ export async function getAllUsers(): Promise<User[]> {
   return db.select().from(users);
 }
 
+export async function getUsersByManagerId(managerId: string): Promise<User[]> {
+  return db.select().from(users).where(eq(users.managerId, managerId));
+}
+
+export async function getVisibleUsers(currentUser: User): Promise<User[]> {
+  if (currentUser.role === "admin") {
+    return db.select().from(users);
+  }
+  if (currentUser.role === "manager") {
+    const teamMembers = await getUsersByManagerId(currentUser.id);
+    return [currentUser, ...teamMembers];
+  }
+  return [currentUser];
+}
+
 export async function updateUser(id: string, data: Partial<Omit<User, "id" | "createdAt">>): Promise<User | undefined> {
   const updateData: any = { ...data, updatedAt: new Date() };
   if (data.password) {
@@ -44,11 +59,22 @@ export async function verifyPassword(user: User, password: string): Promise<bool
   return bcrypt.compare(password, user.password);
 }
 
-export async function getLeadsByUserId(userId: string, role: string): Promise<any[]> {
-  if (role === "admin" || role === "manager") {
+export async function getLeadsByUserRole(user: User): Promise<any[]> {
+  if (user.role === "admin") {
     return db.select().from(leads);
   }
-  return db.select().from(leads).where(eq(leads.userId, userId));
+  if (user.role === "manager") {
+    const teamMembers = await getUsersByManagerId(user.id);
+    const teamIds = [user.id, ...teamMembers.map((m) => m.id)];
+    return db.select().from(leads).where(inArray(leads.userId, teamIds));
+  }
+  return db.select().from(leads).where(eq(leads.userId, user.id));
+}
+
+export async function getLeadsByUserId(userId: string, role: string): Promise<any[]> {
+  const user = await getUserById(userId);
+  if (!user) return [];
+  return getLeadsByUserRole(user);
 }
 
 export async function createLead(data: any): Promise<any> {

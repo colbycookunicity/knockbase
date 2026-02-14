@@ -17,7 +17,7 @@ export default function DashboardScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { leads } = useLeads();
-  const { user, isAdmin, logout } = useAuth();
+  const { user, canManageUsers, logout } = useAuth();
   const [period, setPeriod] = useState<Period>("today");
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
@@ -83,7 +83,7 @@ export default function DashboardScreen() {
             <Text style={[styles.totalCount, { color: theme.tint }]}>{totalLeads}</Text>
             <Text style={[styles.totalLabel, { color: theme.tint }]}>leads</Text>
           </Pressable>
-          {isAdmin && (
+          {canManageUsers && (
             <Pressable onPress={() => router.push("/admin")} style={styles.headerIconBtn}>
               <Ionicons name="people" size={22} color={theme.accentSecondary} />
             </Pressable>
