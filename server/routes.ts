@@ -4,6 +4,7 @@ import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import { pool } from "./db";
 import * as storage from "./storage";
+import * as shopify from "./shopify";
 import { insertUserSchema, loginSchema } from "@shared/schema";
 
 declare module "express-session" {
@@ -286,6 +287,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(404).json({ message: "Territory not found" });
     }
     res.json({ message: "Territory deleted" });
+  });
+
+  app.get("/api/shopify/products", requireAuth, async (req, res) => {
+    try {
+      const first = parseInt(req.query.first as string) || 20;
+      const after = req.query.after as string | undefined;
+      const result = await shopify.getProducts(first, after);
+      res.json(result);
+    } catch (err: any) {
+      console.error("Shopify products error:", err);
+      res.status(500).json({ message: err.message || "Failed to fetch products" });
+    }
+  });
+
+  app.get("/api/shopify/products/:id", requireAuth, async (req, res) => {
+    try {
+      const id = req.params.id as string;
+      const fullId = id.startsWith("gid://") ? id : `gid://shopify/Product/${id}`;
+      const product = await shopify.getProduct(fullId);
+      if (!product) {
+        return res.status(404).json({ message: "Product not found" });
+      }
+      res.json(product);
+    } catch (err: any) {
+      console.error("Shopify product error:", err);
+      res.status(500).json({ message: err.message || "Failed to fetch product" });
+    }
+  });
+
+  app.get("/api/shopify/search", requireAuth, async (req, res) => {
+    try {
+      const q = req.query.q as string;
+      if (!q) return res.json([]);
+      const products = await shopify.searchProducts(q);
+      res.json(products);
+    } catch (err: any) {
+      console.error("Shopify search error:", err);
+      res.status(500).json({ message: err.message || "Search failed" });
+    }
+  });
+
+  app.post("/api/shopify/checkout", requireAuth, async (req, res) => {
+    try {
+      const { lineItems } = req.body;
+      if (!lineItems || !Array.isArray(lineItems) || lineItems.length === 0) {
+        return res.status(400).json({ message: "Line items required" });
+      }
+      const cart = await shopify.createCheckout(lineItems);
+      res.json(cart);
+    } catch (err: any) {
+      console.error("Shopify checkout error:", err);
+      res.status(500).json({ message: err.message || "Checkout failed" });
+    }
+  });
+
+  app.get("/api/shopify/shop", requireAuth, async (_req, res) => {
+    try {
+      const shop = await shopify.getShopInfo();
+      res.json(shop);
+    } catch (err: any) {
+      console.error("Shopify shop error:", err);
+      res.status(500).json({ message: err.message || "Failed to fetch shop info" });
+    }
   });
 
   const httpServer = createServer(app);
