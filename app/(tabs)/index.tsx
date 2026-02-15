@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
-import { View, Text, StyleSheet, Pressable, Platform, ScrollView } from "react-native";
+import { View, Text, StyleSheet, Pressable, Platform, ScrollView, ActivityIndicator } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -34,6 +34,8 @@ export default function MapScreen() {
   const [locationPermission, setLocationPermission] = useState<boolean | null>(null);
   const [showTerritories, setShowTerritories] = useState(true);
 
+  const [locationLoading, setLocationLoading] = useState(true);
+
   useEffect(() => {
     (async () => {
       if (Platform.OS === "web") {
@@ -42,11 +44,16 @@ export default function MapScreen() {
             (pos) => {
               setUserLocation({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
               setLocationPermission(true);
+              setLocationLoading(false);
             },
-            () => setLocationPermission(false)
+            () => {
+              setLocationPermission(false);
+              setLocationLoading(false);
+            }
           );
         } catch {
           setLocationPermission(false);
+          setLocationLoading(false);
         }
         return;
       }
@@ -54,11 +61,17 @@ export default function MapScreen() {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
         setLocationPermission(false);
+        setLocationLoading(false);
         return;
       }
       setLocationPermission(true);
-      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      setUserLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+      try {
+        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        setUserLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+      } catch {
+        // Location fetch failed, will use fallback
+      }
+      setLocationLoading(false);
     })();
   }, []);
 
@@ -175,6 +188,11 @@ export default function MapScreen() {
               })}
             </View>
           )}
+        </View>
+      ) : locationLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.tint} />
+          <Text style={[styles.loadingText, { color: theme.textSecondary }]}>Finding your location...</Text>
         </View>
       ) : (
         <NativeMap
@@ -364,6 +382,16 @@ export default function MapScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
   },
   webFallback: {
     flex: 1,
