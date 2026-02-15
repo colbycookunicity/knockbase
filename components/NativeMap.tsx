@@ -43,6 +43,7 @@ export const NativeMap = forwardRef<MapView, NativeMapProps>(function NativeMap(
           key={lead.id}
           coordinate={{ latitude: lead.latitude, longitude: lead.longitude }}
           onPress={() => onMarkerPress(lead)}
+          tracksViewChanges={selectedLeadId === lead.id}
         >
           <MapPinMarker
             status={lead.status}

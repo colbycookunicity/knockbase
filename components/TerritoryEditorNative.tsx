@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -7,8 +7,9 @@ import {
   TextInput,
   ScrollView,
   Alert,
+  Platform,
 } from "react-native";
-import MapView, { Marker, Polygon, Polyline } from "react-native-maps";
+import MapView, { Marker, Polygon, Polyline, MapPressEvent } from "react-native-maps";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -47,15 +48,20 @@ export function TerritoryEditorNative({ territoryId }: TerritoryEditorNativeProp
     })();
   }, []);
 
-  const handleMapPress = (e: any) => {
+  const handleMapPress = useCallback((e: MapPressEvent) => {
     if (!isDrawing) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const { latitude, longitude } = e.nativeEvent.coordinate;
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch {}
+    const coord = e.nativeEvent?.coordinate;
+    if (!coord) return;
+    const { latitude, longitude } = coord;
+    if (typeof latitude !== "number" || typeof longitude !== "number") return;
     setPoints((prev) => [...prev, { latitude, longitude }]);
-  };
+  }, [isDrawing]);
 
   const handleUndo = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
     setPoints((prev) => prev.slice(0, -1));
   };
 
@@ -68,7 +74,7 @@ export function TerritoryEditorNative({ territoryId }: TerritoryEditorNativeProp
       Alert.alert("Name Required", "Please enter a name for this territory.");
       return;
     }
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
     if (existing) {
       await updateTerritory(existing.id, { name: name.trim(), color, points, assignedRep: assignedRep.trim() });
     } else {
@@ -131,22 +137,12 @@ export function TerritoryEditorNative({ territoryId }: TerritoryEditorNativeProp
           />
         )}
         {points.map((point, index) => (
-          <Marker key={`point-${index}`} coordinate={point} anchor={{ x: 0.5, y: 0.5 }}>
-            <View
-              style={[
-                styles.drawPoint,
-                {
-                  backgroundColor: color,
-                  borderColor: "#FFF",
-                  width: index === 0 ? 20 : 14,
-                  height: index === 0 ? 20 : 14,
-                  borderRadius: index === 0 ? 10 : 7,
-                },
-              ]}
-            >
-              {index === 0 && <Text style={styles.drawPointText}>1</Text>}
-            </View>
-          </Marker>
+          <Marker
+            key={`point-${index}`}
+            coordinate={point}
+            pinColor={index === 0 ? color : "#FFFFFF"}
+            tracksViewChanges={false}
+          />
         ))}
       </MapView>
 
@@ -179,7 +175,7 @@ export function TerritoryEditorNative({ territoryId }: TerritoryEditorNativeProp
           <View style={[styles.drawBar, { backgroundColor: theme.surface }]}>
             <Pressable
               onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch {}
                 setPoints([]);
               }}
               style={[styles.drawAction, { borderRightWidth: 1, borderColor: theme.border }]}
@@ -191,7 +187,7 @@ export function TerritoryEditorNative({ territoryId }: TerritoryEditorNativeProp
               onPress={() => {
                 if (points.length >= 3) {
                   setIsDrawing(false);
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                  try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
                 }
               }}
               style={styles.drawAction}
@@ -245,7 +241,7 @@ export function TerritoryEditorNative({ territoryId }: TerritoryEditorNativeProp
                 <Pressable
                   key={c}
                   onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
                     setColor(c);
                   }}
                   style={[
@@ -331,8 +327,6 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   topLabelText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  drawPoint: { borderWidth: 2, alignItems: "center", justifyContent: "center" },
-  drawPointText: { color: "#FFF", fontSize: 9, fontFamily: "Inter_700Bold" },
   drawControls: { position: "absolute", left: 16, right: 16 },
   drawBar: {
     flexDirection: "row",
