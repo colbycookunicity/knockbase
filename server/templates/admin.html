@@ -275,13 +275,25 @@
     try {
       document.getElementById('sendOtpBtn').disabled = true;
       document.getElementById('sendOtpBtn').textContent = 'Sending...';
-      await api('POST', '/api/auth/otp/request', { email });
+      const result = await api('POST', '/api/auth/otp/request', { email });
       pendingEmail = email;
-      document.getElementById('otpEmailDisplay').textContent = email;
-      document.getElementById('stepEmail').style.display = 'none';
-      document.getElementById('stepOtp').style.display = 'block';
-      document.getElementById('loginOtp').value = '';
-      document.getElementById('loginOtp').focus();
+      if (result.hydra === false) {
+        const verifyResult = await api('POST', '/api/auth/otp/verify', { email, code: '' });
+        currentUser = verifyResult.user;
+        if (currentUser.role !== 'owner' && currentUser.role !== 'admin') {
+          showError('loginError', 'Admin or Owner access required');
+          document.getElementById('sendOtpBtn').disabled = false;
+          document.getElementById('sendOtpBtn').textContent = 'Send Verification Code';
+          return;
+        }
+        showApp();
+      } else {
+        document.getElementById('otpEmailDisplay').textContent = email;
+        document.getElementById('stepEmail').style.display = 'none';
+        document.getElementById('stepOtp').style.display = 'block';
+        document.getElementById('loginOtp').value = '';
+        document.getElementById('loginOtp').focus();
+      }
     } catch (err) {
       showError('loginError', err.message);
     } finally {

@@ -28,14 +28,19 @@ function getHydraUserMessage(code: string): string {
 }
 
 export async function requestOtp(email: string): Promise<void> {
-  const res = await fetch(`${HYDRA_API_URL}/otp/send`, {
+  const url = `${HYDRA_API_URL}/otp/send`;
+  console.log("Hydra OTP request URL:", url, "for email:", email);
+  const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email }),
   });
 
   if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as HydraErrorResponse;
+    const rawText = await res.text();
+    console.error("Hydra OTP error response:", res.status, rawText);
+    let body: HydraErrorResponse = {};
+    try { body = JSON.parse(rawText); } catch {}
     const code = body.code || body.error || "UNKNOWN";
     throw new HydraError(code, getHydraUserMessage(code));
   }
