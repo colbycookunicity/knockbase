@@ -23,6 +23,8 @@ interface AuthContextValue {
   isAdmin: boolean;
   canManageUsers: boolean;
   login: (email: string, password: string) => Promise<User>;
+  requestOtp: (email: string) => Promise<void>;
+  verifyOtp: (email: string, code: string) => Promise<User>;
   logout: () => Promise<void>;
 }
 
@@ -47,6 +49,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
   });
 
+  const requestOtpMutation = useMutation({
+    mutationFn: async ({ email }: { email: string }) => {
+      await apiRequest("POST", "/api/auth/otp/request", { email });
+    },
+  });
+
+  const verifyOtpMutation = useMutation({
+    mutationFn: async ({ email, code }: { email: string; code: string }) => {
+      const res = await apiRequest("POST", "/api/auth/otp/verify", { email, code });
+      const data = await res.json();
+      return data.user as User;
+    },
+    onSuccess: (userData) => {
+      queryClient.setQueryData(["/api/auth/me"], userData);
+    },
+  });
+
   const logoutMutation = useMutation({
     mutationFn: async () => {
       await apiRequest("POST", "/api/auth/logout");
@@ -59,6 +78,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (email: string, password: string) => {
     return loginMutation.mutateAsync({ email, password });
+  }, []);
+
+  const requestOtp = useCallback(async (email: string) => {
+    return requestOtpMutation.mutateAsync({ email });
+  }, []);
+
+  const verifyOtp = useCallback(async (email: string, code: string) => {
+    return verifyOtpMutation.mutateAsync({ email, code });
   }, []);
 
   const logout = useCallback(async () => {
@@ -74,9 +101,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAdmin: user?.role === "admin",
       canManageUsers: user?.role === "owner" || user?.role === "admin",
       login,
+      requestOtp,
+      verifyOtp,
       logout,
     }),
-    [user, isLoading, login, logout]
+    [user, isLoading, login, requestOtp, verifyOtp, logout]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

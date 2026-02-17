@@ -6,6 +6,7 @@ import { pool } from "./db";
 import * as storage from "./storage";
 import * as shopify from "./shopify";
 import { insertUserSchema, loginSchema } from "@shared/schema";
+import { requestOtp, verifyOtp, HydraError } from "./services/hydraClient";
 
 declare module "express-session" {
   interface SessionData {
@@ -95,6 +96,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err) {
       console.error("Login error:", err);
       res.status(500).json({ message: "Server error" });
+    }
+  });
+
+  // OTP Login: Step 1 - Request OTP code via Hydra
+  app.post("/api/auth/otp/request", async (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email || typeof email !== "string") {
+        return res.status(400).json({ message: "Email is required" });
+      }
+
+      const user = await storage.getUserByEmail(email.trim().toLowerCase());
+      if (!user) {
+        return res.status(404).json({ message: "No account found with this email" });
+      }
+      if (user.isActive !== "true") {
+        return res.status(403).json({ message: "Account is deactivated" });
+      }
+
+      await requestOtp(email.trim().toLowerCase());
+      res.json({ message: "Verification code sent to your email" });
+    } catch (err) {
+      if (err instanceof HydraError) {
+        return res.status(400).json({ message: err.message, code: err.code });
+      }
+      console.error("OTP request error:", err);
+      res.status(500).json({ message: "Failed to send verification code" });
+    }
+  });
+
+  // OTP Login: Step 2 - Verify OTP code and create session
+  app.post("/api/auth/otp/verify", async (req, res) => {
+    try {
+      const { email, code } = req.body;
+      if (!email || typeof email !== "string" || !code || typeof code !== "string") {
+        return res.status(400).json({ message: "Email and code are required" });
+      }
+
+      const user = await storage.getUserByEmail(email.trim().toLowerCase());
+      if (!user) {
+        return res.status(404).json({ message: "No account found with this email" });
+      }
+      if (user.isActive !== "true") {
+        return res.status(403).json({ message: "Account is deactivated" });
+      }
+
+      await verifyOtp(email.trim().toLowerCase(), code.trim());
+
+      // OTP verified — create session
+      req.session.userId = user.id;
+      res.json({ user: sanitizeUser(user), verified: true });
+    } catch (err) {
+      if (err instanceof HydraError) {
+        return res.status(400).json({ message: err.message, code: err.code });
+      }
+      console.error("OTP verify error:", err);
+      res.status(500).json({ message: "Verification failed" });
     }
   });
 
