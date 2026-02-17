@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KnockBase Admin - Team Management</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #F1F5F9; color: #1E293B; min-height: 100vh; }
+
+  /* Login */
+  .login-wrap { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
+  .login-card { background: #fff; border-radius: 16px; padding: 40px; max-width: 400px; width: 100%; box-shadow: 0 4px 24px rgba(0,0,0,0.08); }
+  .login-card h1 { font-size: 24px; margin-bottom: 8px; color: #10B981; }
+  .login-card p { color: #64748B; margin-bottom: 24px; font-size: 14px; }
+  .form-group { margin-bottom: 16px; }
+  .form-group label { display: block; font-size: 13px; font-weight: 600; color: #64748B; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .form-group input, .form-group select { width: 100%; height: 44px; border: 1px solid #E2E8F0; border-radius: 10px; padding: 0 14px; font-size: 15px; background: #F8FAFC; transition: border-color 0.2s; }
+  .form-group input:focus, .form-group select:focus { outline: none; border-color: #10B981; background: #fff; }
+  .btn { height: 44px; border: none; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; padding: 0 20px; transition: opacity 0.2s; }
+  .btn:hover { opacity: 0.85; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-primary { background: #10B981; color: #fff; width: 100%; }
+  .btn-sm { height: 34px; font-size: 13px; padding: 0 14px; border-radius: 8px; }
+  .btn-danger { background: #EF4444; color: #fff; }
+  .btn-outline { background: transparent; border: 1px solid #E2E8F0; color: #64748B; }
+  .btn-outline:hover { border-color: #10B981; color: #10B981; }
+  .error-msg { color: #EF4444; font-size: 13px; margin-top: 8px; }
+
+  /* App shell */
+  .app { display: none; }
+  .topbar { background: #fff; border-bottom: 1px solid #E2E8F0; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; }
+  .topbar h1 { font-size: 20px; color: #1E293B; }
+  .topbar-right { display: flex; align-items: center; gap: 12px; }
+  .topbar-user { font-size: 13px; color: #64748B; }
+  .topbar-user strong { color: #1E293B; }
+
+  /* Stats */
+  .stats-bar { display: flex; gap: 16px; padding: 20px 24px; flex-wrap: wrap; }
+  .stat-card { background: #fff; border-radius: 12px; padding: 16px 20px; flex: 1; min-width: 120px; box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
+  .stat-card .stat-value { font-size: 28px; font-weight: 700; }
+  .stat-card .stat-label { font-size: 12px; color: #64748B; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
+
+  /* Content */
+  .content { padding: 0 24px 24px; }
+  .section-header { display: flex; align-items: center; justify-content: space-between; margin: 20px 0 12px; }
+  .section-header h2 { font-size: 14px; color: #64748B; text-transform: uppercase; letter-spacing: 1px; }
+
+  /* User table */
+  .user-table { width: 100%; border-collapse: separate; border-spacing: 0; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
+  .user-table th { text-align: left; padding: 12px 16px; font-size: 12px; color: #64748B; text-transform: uppercase; letter-spacing: 0.5px; background: #F8FAFC; border-bottom: 1px solid #E2E8F0; }
+  .user-table td { padding: 12px 16px; font-size: 14px; border-bottom: 1px solid #F1F5F9; vertical-align: middle; }
+  .user-table tr:last-child td { border-bottom: none; }
+  .user-table tr:hover td { background: #F8FAFC; }
+  .user-table .inactive { opacity: 0.5; }
+
+  .role-badge { display: inline-block; padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
+  .role-owner { background: #F3E8FF; color: #8B5CF6; }
+  .role-admin { background: #DBEAFE; color: #3B82F6; }
+  .role-rep { background: #D1FAE5; color: #10B981; }
+
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+  .status-active { background: #10B981; }
+  .status-inactive { background: #EF4444; }
+
+  .actions { display: flex; gap: 6px; }
+
+  /* Modal */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 100; align-items: center; justify-content: center; padding: 20px; }
+  .modal-overlay.active { display: flex; }
+  .modal { background: #fff; border-radius: 16px; padding: 28px; max-width: 480px; width: 100%; max-height: 85vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.15); }
+  .modal h2 { font-size: 20px; margin-bottom: 20px; }
+  .modal .form-row { display: flex; gap: 12px; }
+  .modal .form-row .form-group { flex: 1; }
+  .role-selector { display: flex; gap: 8px; margin-bottom: 16px; }
+  .role-selector button { flex: 1; height: 40px; border: 1px solid #E2E8F0; border-radius: 8px; background: #F8FAFC; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+  .role-selector button.selected { color: #fff; border-color: transparent; }
+  .role-selector button[data-role="owner"].selected { background: #8B5CF6; }
+  .role-selector button[data-role="admin"].selected { background: #3B82F6; }
+  .role-selector button[data-role="rep"].selected { background: #10B981; }
+  .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+  .modal-actions .btn { flex: 1; }
+
+  .switch-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .switch-row label { font-size: 13px; font-weight: 600; color: #64748B; }
+  .toggle { position: relative; width: 44px; height: 24px; cursor: pointer; }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle .slider { position: absolute; inset: 0; background: #CBD5E1; border-radius: 12px; transition: 0.2s; }
+  .toggle .slider::before { content: ""; position: absolute; width: 18px; height: 18px; left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: 0.2s; }
+  .toggle input:checked + .slider { background: #10B981; }
+  .toggle input:checked + .slider::before { transform: translateX(20px); }
+
+  .empty-state { text-align: center; padding: 60px 20px; color: #94A3B8; }
+  .empty-state p { font-size: 15px; }
+
+  @media (max-width: 768px) {
+    .topbar { padding: 12px 16px; }
+    .stats-bar { padding: 16px; gap: 10px; }
+    .stat-card { min-width: 80px; padding: 12px; }
+    .stat-card .stat-value { font-size: 22px; }
+    .content { padding: 0 16px 16px; }
+    .user-table { font-size: 13px; }
+    .user-table th, .user-table td { padding: 10px 12px; }
+    .hide-mobile { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Login Screen -->
+<div id="loginScreen" class="login-wrap">
+  <div class="login-card">
+    <h1>KnockBase</h1>
+    <p>Sign in to manage your team</p>
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="loginEmail" placeholder="admin@knockbase.com" autocomplete="email">
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="loginPassword" placeholder="Password" autocomplete="current-password">
+    </div>
+    <div id="loginError" class="error-msg" style="display:none"></div>
+    <button class="btn btn-primary" id="loginBtn" style="margin-top:12px">Sign In</button>
+  </div>
+</div>
+
+<!-- App -->
+<div id="app" class="app">
+  <div class="topbar">
+    <h1>Team Management</h1>
+    <div class="topbar-right">
+      <span class="topbar-user">Signed in as <strong id="currentUserName"></strong></span>
+      <button class="btn btn-sm btn-outline" id="logoutBtn">Sign Out</button>
+    </div>
+  </div>
+
+  <div class="stats-bar">
+    <div class="stat-card"><div class="stat-value" id="statOwners" style="color:#8B5CF6">0</div><div class="stat-label">Owners</div></div>
+    <div class="stat-card"><div class="stat-value" id="statAdmins" style="color:#3B82F6">0</div><div class="stat-label">Admins</div></div>
+    <div class="stat-card"><div class="stat-value" id="statReps" style="color:#10B981">0</div><div class="stat-label">Reps</div></div>
+    <div class="stat-card"><div class="stat-value" id="statActive" style="color:#1E293B">0</div><div class="stat-label">Active</div></div>
+  </div>
+
+  <div class="content">
+    <div class="section-header">
+      <h2>All Users</h2>
+      <button class="btn btn-sm btn-primary" id="addUserBtn">+ Add User</button>
+    </div>
+    <div id="userTableWrap"></div>
+  </div>
+</div>
+
+<!-- User Modal -->
+<div class="modal-overlay" id="userModal">
+  <div class="modal">
+    <h2 id="modalTitle">Add User</h2>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Full Name *</label>
+        <input type="text" id="formFullName" placeholder="John Doe">
+      </div>
+      <div class="form-group">
+        <label>Email *</label>
+        <input type="email" id="formEmail" placeholder="john@example.com">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Username</label>
+        <input type="text" id="formUsername" placeholder="johndoe">
+      </div>
+      <div class="form-group">
+        <label>Phone</label>
+        <input type="tel" id="formPhone" placeholder="555-0100">
+      </div>
+    </div>
+    <div class="form-group">
+      <label id="passwordLabel">Password *</label>
+      <input type="password" id="formPassword" placeholder="Password">
+    </div>
+    <div class="form-group">
+      <label>Role</label>
+      <div class="role-selector" id="roleSelector">
+        <button data-role="owner">Owner</button>
+        <button data-role="admin">Admin</button>
+        <button data-role="rep">Rep</button>
+      </div>
+    </div>
+    <div class="form-group" id="managerGroup" style="display:none">
+      <label>Assign to Admin</label>
+      <select id="formManager"><option value="">Unassigned</option></select>
+    </div>
+    <div class="switch-row" id="activeRow" style="display:none">
+      <label>Account Active</label>
+      <label class="toggle"><input type="checkbox" id="formActive" checked><span class="slider"></span></label>
+    </div>
+    <div id="formError" class="error-msg" style="display:none"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" id="cancelBtn">Cancel</button>
+      <button class="btn btn-primary" id="saveBtn">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  let currentUser = null;
+  let allUsers = [];
+  let editingUserId = null;
+  let selectedRole = 'rep';
+
+  // API helper
+  async function api(method, path, body) {
+    const opts = { method, credentials: 'include', headers: {} };
+    if (body) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+    const res = await fetch(path, opts);
+    if (!res.ok) {
+      const text = await res.text();
+      let msg;
+      try { msg = JSON.parse(text).message; } catch { msg = text; }
+      throw new Error(msg || `Error ${res.status}`);
+    }
+    return res.json();
+  }
+
+  // Check auth on load
+  async function checkAuth() {
+    try {
+      const data = await api('GET', '/api/auth/me');
+      currentUser = data.user;
+      if (currentUser.role !== 'owner' && currentUser.role !== 'admin') {
+        document.getElementById('loginError').textContent = 'Admin or Owner access required';
+        document.getElementById('loginError').style.display = 'block';
+        return;
+      }
+      showApp();
+    } catch {
+      showLogin();
+    }
+  }
+
+  function showLogin() {
+    document.getElementById('loginScreen').style.display = 'flex';
+    document.getElementById('app').style.display = 'none';
+  }
+
+  function showApp() {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    document.getElementById('currentUserName').textContent = currentUser.fullName;
+    loadUsers();
+  }
+
+  // Login
+  document.getElementById('loginBtn').addEventListener('click', async () => {
+    const email = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPassword').value;
+    const errEl = document.getElementById('loginError');
+    errEl.style.display = 'none';
+    if (!email || !password) { errEl.textContent = 'Email and password required'; errEl.style.display = 'block'; return; }
+    try {
+      document.getElementById('loginBtn').disabled = true;
+      const data = await api('POST', '/api/auth/login', { email, password });
+      currentUser = data.user;
+      if (currentUser.role !== 'owner' && currentUser.role !== 'admin') {
+        errEl.textContent = 'Admin or Owner access required';
+        errEl.style.display = 'block';
+        document.getElementById('loginBtn').disabled = false;
+        return;
+      }
+      showApp();
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.style.display = 'block';
+    } finally {
+      document.getElementById('loginBtn').disabled = false;
+    }
+  });
+
+  // Enter key on password
+  document.getElementById('loginPassword').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('loginBtn').click();
+  });
+
+  // Logout
+  document.getElementById('logoutBtn').addEventListener('click', async () => {
+    await api('POST', '/api/auth/logout').catch(() => {});
+    currentUser = null;
+    showLogin();
+  });
+
+  // Load users
+  async function loadUsers() {
+    try {
+      allUsers = await api('GET', '/api/users');
+      renderStats();
+      renderTable();
+    } catch (err) {
+      console.error('Failed to load users:', err);
+    }
+  }
+
+  function renderStats() {
+    document.getElementById('statOwners').textContent = allUsers.filter(u => u.role === 'owner').length;
+    document.getElementById('statAdmins').textContent = allUsers.filter(u => u.role === 'admin').length;
+    document.getElementById('statReps').textContent = allUsers.filter(u => u.role === 'rep').length;
+    document.getElementById('statActive').textContent = allUsers.filter(u => u.isActive === 'true').length;
+  }
+
+  function renderTable() {
+    const wrap = document.getElementById('userTableWrap');
+    if (!allUsers.length) {
+      wrap.innerHTML = '<div class="empty-state"><p>No team members yet. Click "+ Add User" to get started.</p></div>';
+      return;
+    }
+
+    const admins = allUsers.filter(u => u.role === 'admin');
+    const getAdminName = (id) => { const a = allUsers.find(u => u.id === id); return a ? a.fullName : ''; };
+
+    let html = `<table class="user-table">
+      <thead><tr>
+        <th>Name</th>
+        <th>Email</th>
+        <th class="hide-mobile">Phone</th>
+        <th>Role</th>
+        <th class="hide-mobile">Team</th>
+        <th>Status</th>
+        <th>Actions</th>
+      </tr></thead><tbody>`;
+
+    for (const u of allUsers) {
+      const isActive = u.isActive === 'true';
+      const isSelf = u.id === currentUser.id;
+      const roleClass = 'role-' + u.role;
+      const adminName = u.managerId ? getAdminName(u.managerId) : '';
+      html += `<tr class="${isActive ? '' : 'inactive'}">
+        <td><strong>${esc(u.fullName)}</strong>${isSelf ? ' <span style="color:#10B981;font-size:11px">(you)</span>' : ''}</td>
+        <td>${esc(u.email)}</td>
+        <td class="hide-mobile">${esc(u.phone || '-')}</td>
+        <td><span class="role-badge ${roleClass}">${esc(u.role)}</span></td>
+        <td class="hide-mobile">${adminName ? esc(adminName) + "'s team" : '-'}</td>
+        <td><span class="status-dot ${isActive ? 'status-active' : 'status-inactive'}"></span>${isActive ? 'Active' : 'Inactive'}</td>
+        <td class="actions">
+          <button class="btn btn-sm btn-outline" onclick="window._editUser('${u.id}')">Edit</button>
+          ${!isSelf ? `<button class="btn btn-sm btn-danger" onclick="window._deleteUser('${u.id}', '${esc(u.fullName)}')">Delete</button>` : ''}
+        </td>
+      </tr>`;
+    }
+
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+  }
+
+  function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+  // Modal logic
+  const modal = document.getElementById('userModal');
+  const roleBtns = document.querySelectorAll('#roleSelector button');
+
+  function openModal(user) {
+    editingUserId = user ? user.id : null;
+    document.getElementById('modalTitle').textContent = user ? 'Edit User' : 'Add User';
+    document.getElementById('formFullName').value = user ? user.fullName : '';
+    document.getElementById('formEmail').value = user ? user.email : '';
+    document.getElementById('formUsername').value = user ? user.username : '';
+    document.getElementById('formPhone').value = user ? user.phone : '';
+    document.getElementById('formPassword').value = '';
+    document.getElementById('formActive').checked = user ? user.isActive === 'true' : true;
+    document.getElementById('passwordLabel').textContent = user ? 'New Password (leave blank to keep)' : 'Password *';
+    document.getElementById('activeRow').style.display = user && user.id !== currentUser.id ? 'flex' : 'none';
+    document.getElementById('formError').style.display = 'none';
+
+    selectedRole = user ? user.role : (currentUser.role === 'admin' ? 'rep' : 'rep');
+    updateRoleUI();
+    updateManagerDropdown(user ? user.managerId : null);
+
+    // Admin can only create reps
+    roleBtns.forEach(btn => {
+      if (currentUser.role === 'admin') {
+        btn.style.display = btn.dataset.role === 'rep' ? '' : 'none';
+      } else {
+        btn.style.display = '';
+      }
+    });
+
+    modal.classList.add('active');
+  }
+
+  function closeModal() {
+    modal.classList.remove('active');
+    editingUserId = null;
+  }
+
+  function updateRoleUI() {
+    roleBtns.forEach(btn => btn.classList.toggle('selected', btn.dataset.role === selectedRole));
+    const showManager = selectedRole === 'rep' && currentUser.role === 'owner';
+    document.getElementById('managerGroup').style.display = showManager ? 'block' : 'none';
+  }
+
+  function updateManagerDropdown(currentManagerId) {
+    const sel = document.getElementById('formManager');
+    const admins = allUsers.filter(u => u.role === 'admin');
+    sel.innerHTML = '<option value="">Unassigned</option>' +
+      admins.map(a => `<option value="${a.id}" ${a.id === currentManagerId ? 'selected' : ''}>${esc(a.fullName)}</option>`).join('');
+  }
+
+  roleBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      selectedRole = btn.dataset.role;
+      updateRoleUI();
+    });
+  });
+
+  document.getElementById('addUserBtn').addEventListener('click', () => openModal(null));
+  document.getElementById('cancelBtn').addEventListener('click', closeModal);
+  modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+
+  // Save
+  document.getElementById('saveBtn').addEventListener('click', async () => {
+    const fullName = document.getElementById('formFullName').value.trim();
+    const email = document.getElementById('formEmail').value.trim();
+    const username = document.getElementById('formUsername').value.trim();
+    const phone = document.getElementById('formPhone').value.trim();
+    const password = document.getElementById('formPassword').value.trim();
+    const isActive = document.getElementById('formActive').checked;
+    const managerId = document.getElementById('formManager').value || null;
+    const errEl = document.getElementById('formError');
+    errEl.style.display = 'none';
+
+    if (!fullName || !email) { errEl.textContent = 'Full name and email are required'; errEl.style.display = 'block'; return; }
+    if (!editingUserId && !password) { errEl.textContent = 'Password is required for new users'; errEl.style.display = 'block'; return; }
+
+    const body = { fullName, email, username, phone, role: selectedRole };
+    if (password) body.password = password;
+    if (selectedRole === 'rep' && managerId) body.managerId = managerId;
+    if (selectedRole !== 'rep') body.managerId = null;
+    if (editingUserId) body.isActive = isActive;
+
+    try {
+      document.getElementById('saveBtn').disabled = true;
+      if (editingUserId) {
+        await api('PUT', `/api/users/${editingUserId}`, body);
+      } else {
+        await api('POST', '/api/users', body);
+      }
+      closeModal();
+      await loadUsers();
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.style.display = 'block';
+    } finally {
+      document.getElementById('saveBtn').disabled = false;
+    }
+  });
+
+  // Edit / Delete
+  window._editUser = function(id) {
+    const user = allUsers.find(u => u.id === id);
+    if (user) openModal(user);
+  };
+
+  window._deleteUser = async function(id, name) {
+    if (!confirm(`Delete ${name}? This cannot be undone.`)) return;
+    try {
+      await api('DELETE', `/api/users/${id}`);
+      await loadUsers();
+    } catch (err) {
+      alert('Failed to delete user: ' + err.message);
+    }
+  };
+
+  // Start
+  checkAuth();
+})();
+</script>
+</body>
+</html>
