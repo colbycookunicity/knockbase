@@ -30,8 +30,8 @@ KnockBase is a mobile-first door-to-door sales tracking application built with E
 - **Styling**: StyleSheet with Inter font family, custom color theme
 - **Maps**: react-native-maps v1.18.0 (Expo Go compatible)
 
-### Default Admin Account
-- Email: admin@knockbase.com (login via OTP, created on first server start)
+### Default Owner Account
+- Email: colby.cook@unicity.com (login via OTP, created on first server start)
 
 ### Database Schema (shared/schema.ts)
 - `users` - id (uuid), username, fullName, role (owner/admin/rep), managerId (nullable FK to users), email (unique, used for OTP login), phone, isActive

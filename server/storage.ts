@@ -116,15 +116,18 @@ export async function deleteTerritory(id: string): Promise<boolean> {
 }
 
 export async function seedAdminUser(): Promise<void> {
-  const existing = await getUserByEmail("admin@knockbase.com");
+  const existing = await getUserByEmail("colby.cook@unicity.com");
   if (!existing) {
     await createUser({
-      username: "admin",
-      fullName: "Admin User",
+      username: "colby",
+      fullName: "Colby Cook",
       role: "owner",
-      email: "admin@knockbase.com",
+      email: "colby.cook@unicity.com",
       phone: "",
     });
-    console.log("Default owner user created (email: admin@knockbase.com, login via OTP)");
+    console.log("Default owner user created (email: colby.cook@unicity.com, login via OTP)");
+  } else if (existing.role !== "owner") {
+    await updateUser(existing.id, { role: "owner" });
+    console.log("Updated colby.cook@unicity.com to owner role");
   }
 }
