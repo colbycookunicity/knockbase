@@ -53,6 +53,19 @@ export const territories = pgTable("territories", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+export const otpChallenges = pgTable("otp_challenges", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  email: text("email").notNull(),
+  codeHash: text("code_hash").notNull(),
+  purpose: text("purpose").notNull().default("login"),
+  attempts: text("attempts").notNull().default("0"),
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   fullName: true,
