@@ -20,19 +20,19 @@ import { useTheme } from "@/lib/useTheme";
 import { useAuth, User } from "@/lib/auth-context";
 import { apiRequest } from "@/lib/query-client";
 
-type Role = "admin" | "manager" | "sales_rep";
+type Role = "owner" | "admin" | "rep";
 
 const ROLE_CONFIG: Record<Role, { label: string; icon: string; color: string }> = {
-  admin: { label: "Admin", icon: "shield", color: "#8B5CF6" },
-  manager: { label: "Manager", icon: "briefcase", color: "#3B82F6" },
-  sales_rep: { label: "Sales Rep", icon: "person", color: "#10B981" },
+  owner: { label: "Owner", icon: "shield", color: "#8B5CF6" },
+  admin: { label: "Admin", icon: "briefcase", color: "#3B82F6" },
+  rep: { label: "Rep", icon: "person", color: "#10B981" },
 };
 
 export default function AdminScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user: currentUser, isAdmin, isManager } = useAuth();
+  const { user: currentUser, isOwner, isAdmin } = useAuth();
 
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,7 +44,7 @@ export default function AdminScreen() {
   const [formEmail, setFormEmail] = useState("");
   const [formPhone, setFormPhone] = useState("");
   const [formPassword, setFormPassword] = useState("");
-  const [formRole, setFormRole] = useState<Role>("sales_rep");
+  const [formRole, setFormRole] = useState<Role>("rep");
   const [formManagerId, setFormManagerId] = useState<string | null>(null);
   const [formActive, setFormActive] = useState(true);
   const [formError, setFormError] = useState("");
@@ -66,11 +66,11 @@ export default function AdminScreen() {
     fetchUsers();
   }, [fetchUsers]);
 
-  const managers = useMemo(() => {
-    return users.filter((u) => u.role === "manager");
+  const admins = useMemo(() => {
+    return users.filter((u) => u.role === "admin");
   }, [users]);
 
-  const getManagerName = (managerId: string | null) => {
+  const getAdminName = (managerId: string | null) => {
     if (!managerId) return null;
     const mgr = users.find((u) => u.id === managerId);
     return mgr?.fullName || null;
@@ -83,8 +83,8 @@ export default function AdminScreen() {
     setFormEmail("");
     setFormPhone("");
     setFormPassword("");
-    setFormRole(isManager ? "sales_rep" : "sales_rep");
-    setFormManagerId(isManager ? (currentUser?.id ?? null) : null);
+    setFormRole(isAdmin ? "rep" : "rep");
+    setFormManagerId(isAdmin ? (currentUser?.id ?? null) : null);
     setFormActive(true);
     setFormError("");
     setModalVisible(true);
@@ -105,8 +105,8 @@ export default function AdminScreen() {
   };
 
   const handleSave = async () => {
-    if (!formUsername.trim() || !formFullName.trim()) {
-      setFormError("Username and full name are required");
+    if (!formEmail.trim() || !formFullName.trim()) {
+      setFormError("Email and full name are required");
       return;
     }
     if (!editingUser && !formPassword.trim()) {
@@ -124,7 +124,7 @@ export default function AdminScreen() {
           phone: formPhone.trim(),
           role: formRole,
           isActive: formActive,
-          managerId: formRole === "sales_rep" ? formManagerId : null,
+          managerId: formRole === "rep" ? formManagerId : null,
         };
         if (formPassword.trim()) body.password = formPassword.trim();
         const res = await apiRequest("PUT", `/api/users/${editingUser.id}`, body);
@@ -139,7 +139,7 @@ export default function AdminScreen() {
           password: formPassword.trim(),
           role: formRole,
         };
-        if (formRole === "sales_rep" && formManagerId) {
+        if (formRole === "rep" && formManagerId) {
           body.managerId = formManagerId;
         }
         const res = await apiRequest("POST", "/api/users", body);
@@ -150,7 +150,7 @@ export default function AdminScreen() {
     } catch (err: any) {
       const msg = err?.message || "";
       if (msg.includes("409")) {
-        setFormError("Username already taken");
+        setFormError("Email already taken");
       } else if (msg.includes("403")) {
         setFormError("You don't have permission to do this");
       } else {
@@ -199,25 +199,55 @@ export default function AdminScreen() {
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
 
+  // Build team-grouped view for owners, flat list for admins
   const groupedUsers = useMemo(() => {
-    if (!isAdmin) {
+    if (!isOwner) {
+      // Admin sees their own team
       return [{ title: "Your Team", data: users.filter((u) => u.id !== currentUser?.id) }];
     }
-    const admins = users.filter((u) => u.role === "admin");
-    const managersList = users.filter((u) => u.role === "manager");
-    const reps = users.filter((u) => u.role === "sales_rep");
+
+    // Owner sees the full team hierarchy
+    const owners = users.filter((u) => u.role === "owner");
+    const adminsList = users.filter((u) => u.role === "admin");
+    const reps = users.filter((u) => u.role === "rep");
+
     const sections: { title: string; data: User[] }[] = [];
-    if (admins.length) sections.push({ title: "Admins", data: admins });
-    if (managersList.length) sections.push({ title: "Managers", data: managersList });
-    if (reps.length) sections.push({ title: "Sales Reps", data: reps });
+    if (owners.length) sections.push({ title: "Owners", data: owners });
+
+    // Group reps under their admins for team view
+    for (const admin of adminsList) {
+      const teamReps = reps.filter((r) => r.managerId === admin.id);
+      sections.push({
+        title: `${admin.fullName}'s Team`,
+        data: [admin, ...teamReps],
+      });
+    }
+
+    // Unassigned reps (no admin)
+    const unassigned = reps.filter(
+      (r) => !r.managerId || !adminsList.some((a) => a.id === r.managerId)
+    );
+    if (unassigned.length) {
+      sections.push({ title: "Unassigned Reps", data: unassigned });
+    }
+
     return sections;
-  }, [users, isAdmin, currentUser]);
+  }, [users, isOwner, currentUser]);
+
+  // Stats for the header
+  const stats = useMemo(() => {
+    const ownerCount = users.filter((u) => u.role === "owner").length;
+    const adminCount = users.filter((u) => u.role === "admin").length;
+    const repCount = users.filter((u) => u.role === "rep").length;
+    const activeCount = users.filter((u) => u.isActive === "true").length;
+    return { ownerCount, adminCount, repCount, activeCount, total: users.length };
+  }, [users]);
 
   const renderUser = ({ item }: { item: User }) => {
     const isSelf = item.id === currentUser?.id;
     const isActive = item.isActive === "true";
-    const roleConf = ROLE_CONFIG[item.role] || ROLE_CONFIG.sales_rep;
-    const managerName = getManagerName(item.managerId);
+    const roleConf = ROLE_CONFIG[item.role] || ROLE_CONFIG.rep;
+    const adminName = getAdminName(item.managerId);
 
     return (
       <View style={[styles.userCard, { backgroundColor: theme.surface, opacity: isActive ? 1 : 0.6 }]}>
@@ -229,12 +259,15 @@ export default function AdminScreen() {
             <Text style={[styles.userName, { color: theme.text }]} numberOfLines={1}>
               {item.fullName}
             </Text>
-            <Text style={[styles.userMeta, { color: theme.textSecondary }]}>
-              @{item.username} - {roleConf.label}
-              {managerName ? ` (${managerName}'s team)` : ""}
+            <Text style={[styles.userMeta, { color: theme.textSecondary }]} numberOfLines={1}>
+              {item.email}
+              {adminName ? ` \u00B7 ${adminName}'s team` : ""}
             </Text>
           </View>
           <View style={styles.userActions}>
+            <View style={[styles.roleBadge, { backgroundColor: roleConf.color + "18" }]}>
+              <Text style={[styles.roleBadgeText, { color: roleConf.color }]}>{roleConf.label}</Text>
+            </View>
             {!isSelf && (
               <>
                 <Pressable onPress={() => toggleActive(item)} style={styles.actionBtn}>
@@ -269,7 +302,7 @@ export default function AdminScreen() {
     return result;
   }, [groupedUsers]);
 
-  const availableRoles: Role[] = isAdmin ? ["admin", "manager", "sales_rep"] : ["sales_rep"];
+  const availableRoles: Role[] = isOwner ? ["owner", "admin", "rep"] : ["rep"];
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -286,13 +319,36 @@ export default function AdminScreen() {
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={24} color={theme.tint} />
         </Pressable>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>
-          {isAdmin ? "User Management" : "My Team"}
-        </Text>
+        <Text style={[styles.headerTitle, { color: theme.text }]}>Team Management</Text>
         <Pressable onPress={openCreateModal} style={styles.addBtn}>
           <Ionicons name="person-add" size={22} color={theme.tint} />
         </Pressable>
       </View>
+
+      {/* Stats bar */}
+      {!loading && (
+        <View style={[styles.statsBar, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
+          <View style={styles.statItem}>
+            <Text style={[styles.statValue, { color: ROLE_CONFIG.owner.color }]}>{stats.ownerCount}</Text>
+            <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Owners</Text>
+          </View>
+          <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
+          <View style={styles.statItem}>
+            <Text style={[styles.statValue, { color: ROLE_CONFIG.admin.color }]}>{stats.adminCount}</Text>
+            <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Admins</Text>
+          </View>
+          <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
+          <View style={styles.statItem}>
+            <Text style={[styles.statValue, { color: ROLE_CONFIG.rep.color }]}>{stats.repCount}</Text>
+            <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Reps</Text>
+          </View>
+          <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
+          <View style={styles.statItem}>
+            <Text style={[styles.statValue, { color: theme.text }]}>{stats.activeCount}</Text>
+            <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Active</Text>
+          </View>
+        </View>
+      )}
 
       {loading ? (
         <View style={styles.center}>
@@ -315,7 +371,7 @@ export default function AdminScreen() {
           contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + 20 }]}
           ListEmptyComponent={
             <View style={styles.center}>
-              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No users found</Text>
+              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No team members yet</Text>
             </View>
           }
         />
@@ -327,7 +383,7 @@ export default function AdminScreen() {
             <ScrollView showsVerticalScrollIndicator={false}>
               <View style={styles.modalHeader}>
                 <Text style={[styles.modalTitle, { color: theme.text }]}>
-                  {editingUser ? "Edit User" : "Create User"}
+                  {editingUser ? "Edit User" : "Add Team Member"}
                 </Text>
                 <Pressable onPress={() => setModalVisible(false)}>
                   <Ionicons name="close" size={24} color={theme.textSecondary} />
@@ -335,13 +391,14 @@ export default function AdminScreen() {
               </View>
 
               <View style={styles.formGroup}>
-                <Text style={[styles.label, { color: theme.textSecondary }]}>Username</Text>
+                <Text style={[styles.label, { color: theme.textSecondary }]}>Email (login)</Text>
                 <TextInput
                   style={[styles.formInput, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
-                  value={formUsername}
-                  onChangeText={setFormUsername}
+                  value={formEmail}
+                  onChangeText={setFormEmail}
+                  keyboardType="email-address"
                   autoCapitalize="none"
-                  placeholder="username"
+                  placeholder="email@example.com"
                   placeholderTextColor={theme.textSecondary}
                 />
               </View>
@@ -358,14 +415,13 @@ export default function AdminScreen() {
               </View>
 
               <View style={styles.formGroup}>
-                <Text style={[styles.label, { color: theme.textSecondary }]}>Email</Text>
+                <Text style={[styles.label, { color: theme.textSecondary }]}>Username (optional)</Text>
                 <TextInput
                   style={[styles.formInput, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
-                  value={formEmail}
-                  onChangeText={setFormEmail}
-                  keyboardType="email-address"
+                  value={formUsername}
+                  onChangeText={setFormUsername}
                   autoCapitalize="none"
-                  placeholder="email@example.com"
+                  placeholder="username"
                   placeholderTextColor={theme.textSecondary}
                 />
               </View>
@@ -414,9 +470,15 @@ export default function AdminScreen() {
                         ]}
                         onPress={() => {
                           setFormRole(role);
-                          if (role !== "sales_rep") setFormManagerId(null);
+                          if (role !== "rep") setFormManagerId(null);
                         }}
                       >
+                        <Ionicons
+                          name={conf.icon as any}
+                          size={14}
+                          color={isSelected ? "#FFF" : theme.textSecondary}
+                          style={{ marginRight: 4 }}
+                        />
                         <Text style={{ color: isSelected ? "#FFF" : theme.text, fontFamily: "Inter_500Medium", fontSize: 13 }}>
                           {conf.label}
                         </Text>
@@ -426,13 +488,13 @@ export default function AdminScreen() {
                 </View>
               </View>
 
-              {isAdmin && formRole === "sales_rep" && managers.length > 0 && (
+              {isOwner && formRole === "rep" && admins.length > 0 && (
                 <View style={styles.formGroup}>
-                  <Text style={[styles.label, { color: theme.textSecondary }]}>Assign to Manager</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.managerScroll}>
+                  <Text style={[styles.label, { color: theme.textSecondary }]}>Assign to Admin</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.adminScroll}>
                     <Pressable
                       style={[
-                        styles.managerChip,
+                        styles.adminChip,
                         {
                           backgroundColor: !formManagerId ? theme.accent : theme.background,
                           borderColor: !formManagerId ? theme.accent : theme.border,
@@ -444,22 +506,22 @@ export default function AdminScreen() {
                         Unassigned
                       </Text>
                     </Pressable>
-                    {managers.map((mgr) => {
-                      const selected = formManagerId === mgr.id;
+                    {admins.map((adm) => {
+                      const selected = formManagerId === adm.id;
                       return (
                         <Pressable
-                          key={mgr.id}
+                          key={adm.id}
                           style={[
-                            styles.managerChip,
+                            styles.adminChip,
                             {
                               backgroundColor: selected ? theme.accent : theme.background,
                               borderColor: selected ? theme.accent : theme.border,
                             },
                           ]}
-                          onPress={() => setFormManagerId(mgr.id)}
+                          onPress={() => setFormManagerId(adm.id)}
                         >
                           <Text style={{ color: selected ? "#FFF" : theme.text, fontFamily: "Inter_500Medium", fontSize: 13 }}>
-                            {mgr.fullName}
+                            {adm.fullName}
                           </Text>
                         </Pressable>
                       );
@@ -490,7 +552,7 @@ export default function AdminScreen() {
                 {saving ? (
                   <ActivityIndicator color="#FFF" size="small" />
                 ) : (
-                  <Text style={styles.saveBtnText}>{editingUser ? "Save Changes" : "Create User"}</Text>
+                  <Text style={styles.saveBtnText}>{editingUser ? "Save Changes" : "Add Member"}</Text>
                 )}
               </Pressable>
             </ScrollView>
@@ -513,6 +575,18 @@ const styles = StyleSheet.create({
   backBtn: { padding: 4, marginRight: 8 },
   headerTitle: { flex: 1, fontSize: 20, fontFamily: "Inter_700Bold" },
   addBtn: { padding: 4 },
+  statsBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-around",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+  },
+  statItem: { alignItems: "center", flex: 1 },
+  statValue: { fontSize: 20, fontFamily: "Inter_700Bold" },
+  statLabel: { fontSize: 11, fontFamily: "Inter_500Medium", marginTop: 2, textTransform: "uppercase" as const, letterSpacing: 0.5 },
+  statDivider: { width: 1, height: 28, marginHorizontal: 4 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 60 },
   list: { padding: 16, gap: 8 },
   sectionHeader: {
@@ -520,7 +594,7 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_600SemiBold",
     textTransform: "uppercase" as const,
     letterSpacing: 1,
-    marginTop: 12,
+    marginTop: 16,
     marginBottom: 6,
     paddingHorizontal: 4,
   },
@@ -530,7 +604,9 @@ const styles = StyleSheet.create({
   userInfo: { flex: 1 },
   userName: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
   userMeta: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
-  userActions: { flexDirection: "row", alignItems: "center", gap: 8 },
+  userActions: { flexDirection: "row", alignItems: "center", gap: 6 },
+  roleBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  roleBadgeText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
   actionBtn: { padding: 4 },
   selfBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   selfBadgeText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
@@ -559,9 +635,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   roleRow: { flexDirection: "row", gap: 8 },
-  roleBtn: { flex: 1, height: 44, borderRadius: 10, alignItems: "center", justifyContent: "center", borderWidth: 1 },
-  managerScroll: { flexDirection: "row" },
-  managerChip: {
+  roleBtn: { flex: 1, height: 44, borderRadius: 10, alignItems: "center", justifyContent: "center", borderWidth: 1, flexDirection: "row" },
+  adminScroll: { flexDirection: "row" },
+  adminChip: {
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 10,

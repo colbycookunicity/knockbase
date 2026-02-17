@@ -20,25 +20,25 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
-async function requireAdminOrManager(req: Request, res: Response, next: NextFunction) {
+async function requireOwnerOrAdmin(req: Request, res: Response, next: NextFunction) {
   if (!req.session.userId) {
     return res.status(401).json({ message: "Not authenticated" });
   }
   const user = await storage.getUserById(req.session.userId);
-  if (!user || (user.role !== "admin" && user.role !== "manager")) {
-    return res.status(403).json({ message: "Admin or manager access required" });
+  if (!user || (user.role !== "owner" && user.role !== "admin")) {
+    return res.status(403).json({ message: "Owner or admin access required" });
   }
   (req as any).currentUser = user;
   next();
 }
 
-async function requireAdmin(req: Request, res: Response, next: NextFunction) {
+async function requireOwner(req: Request, res: Response, next: NextFunction) {
   if (!req.session.userId) {
     return res.status(401).json({ message: "Not authenticated" });
   }
   const user = await storage.getUserById(req.session.userId);
-  if (!user || user.role !== "admin") {
-    return res.status(403).json({ message: "Admin access required" });
+  if (!user || user.role !== "owner") {
+    return res.status(403).json({ message: "Owner access required" });
   }
   next();
 }
@@ -76,19 +76,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const parsed = loginSchema.safeParse(req.body);
       if (!parsed.success) {
-        return res.status(400).json({ message: "Username and password required" });
+        return res.status(400).json({ message: "Email and password required" });
       }
-      const { username, password } = parsed.data;
-      const user = await storage.getUserByUsername(username);
+      const { email, password } = parsed.data;
+      const user = await storage.getUserByEmail(email);
       if (!user) {
-        return res.status(401).json({ message: "Invalid username or password" });
+        return res.status(401).json({ message: "Invalid email or password" });
       }
       if (user.isActive !== "true") {
         return res.status(403).json({ message: "Account is deactivated" });
       }
       const valid = await storage.verifyPassword(user, password);
       if (!valid) {
-        return res.status(401).json({ message: "Invalid username or password" });
+        return res.status(401).json({ message: "Invalid email or password" });
       }
       req.session.userId = user.id;
       res.json({ user: sanitizeUser(user) });
@@ -118,33 +118,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ user: sanitizeUser(user) });
   });
 
-  app.get("/api/users", requireAdminOrManager, async (req, res) => {
+  app.get("/api/users", requireOwnerOrAdmin, async (req, res) => {
     const currentUser = (req as any).currentUser;
     const visibleUsers = await storage.getVisibleUsers(currentUser);
     res.json(visibleUsers.map(sanitizeUser));
   });
 
-  app.post("/api/users", requireAdminOrManager, async (req, res) => {
+  app.post("/api/users", requireOwnerOrAdmin, async (req, res) => {
     try {
       const currentUser = (req as any).currentUser;
       const body = { ...req.body };
 
-      if (currentUser.role === "manager") {
-        body.role = "sales_rep";
+      if (currentUser.role === "admin") {
+        body.role = "rep";
         body.managerId = currentUser.id;
       }
 
-      if (currentUser.role === "admin" && body.role === "sales_rep" && !body.managerId) {
-        // admin creating a rep without a manager - that's fine
+      if (currentUser.role === "owner" && body.role === "rep" && !body.managerId) {
+        // owner creating a rep without an admin - that's fine
       }
 
       const parsed = insertUserSchema.safeParse(body);
       if (!parsed.success) {
         return res.status(400).json({ message: "Invalid user data", errors: parsed.error.flatten() });
       }
-      const existing = await storage.getUserByUsername(parsed.data.username);
+      const existing = await storage.getUserByEmail(parsed.data.email);
       if (existing) {
-        return res.status(409).json({ message: "Username already taken" });
+        return res.status(409).json({ message: "Email already taken" });
       }
       const user = await storage.createUser(parsed.data);
       res.status(201).json(sanitizeUser(user));
@@ -154,12 +154,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/users/:id", requireAdminOrManager, async (req, res) => {
+  app.put("/api/users/:id", requireOwnerOrAdmin, async (req, res) => {
     try {
       const currentUser = (req as any).currentUser;
       const targetId = req.params.id as string;
 
-      if (currentUser.role === "manager") {
+      if (currentUser.role === "admin") {
         const targetUser = await storage.getUserById(targetId);
         if (!targetUser) {
           return res.status(404).json({ message: "User not found" });
@@ -167,8 +167,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (targetUser.id !== currentUser.id && targetUser.managerId !== currentUser.id) {
           return res.status(403).json({ message: "You can only edit your own team members" });
         }
-        if (req.body.role && req.body.role !== "sales_rep" && targetUser.id !== currentUser.id) {
-          return res.status(403).json({ message: "Managers can only assign sales_rep role" });
+        if (req.body.role && req.body.role !== "rep" && targetUser.id !== currentUser.id) {
+          return res.status(403).json({ message: "Admins can only assign rep role" });
         }
       }
 
@@ -193,11 +193,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/users/:id", requireAdminOrManager, async (req, res) => {
+  app.delete("/api/users/:id", requireOwnerOrAdmin, async (req, res) => {
     const currentUser = (req as any).currentUser;
     const targetId = req.params.id as string;
 
-    if (currentUser.role === "manager") {
+    if (currentUser.role === "admin") {
       const targetUser = await storage.getUserById(targetId);
       if (!targetUser || targetUser.managerId !== currentUser.id) {
         return res.status(403).json({ message: "You can only delete your own team members" });

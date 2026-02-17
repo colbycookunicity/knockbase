@@ -6,7 +6,7 @@ export interface User {
   id: string;
   username: string;
   fullName: string;
-  role: "admin" | "manager" | "sales_rep";
+  role: "owner" | "admin" | "rep";
   managerId: string | null;
   email: string;
   phone: string;
@@ -19,10 +19,10 @@ interface AuthContextValue {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  isOwner: boolean;
   isAdmin: boolean;
-  isManager: boolean;
   canManageUsers: boolean;
-  login: (username: string, password: string) => Promise<User>;
+  login: (email: string, password: string) => Promise<User>;
   logout: () => Promise<void>;
 }
 
@@ -37,8 +37,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
 
   const loginMutation = useMutation({
-    mutationFn: async ({ username, password }: { username: string; password: string }) => {
-      const res = await apiRequest("POST", "/api/auth/login", { username, password });
+    mutationFn: async ({ email, password }: { email: string; password: string }) => {
+      const res = await apiRequest("POST", "/api/auth/login", { email, password });
       const data = await res.json();
       return data.user as User;
     },
@@ -57,8 +57,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
   });
 
-  const login = useCallback(async (username: string, password: string) => {
-    return loginMutation.mutateAsync({ username, password });
+  const login = useCallback(async (email: string, password: string) => {
+    return loginMutation.mutateAsync({ email, password });
   }, []);
 
   const logout = useCallback(async () => {
@@ -70,9 +70,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user: user ?? null,
       isLoading,
       isAuthenticated: !!user,
+      isOwner: user?.role === "owner",
       isAdmin: user?.role === "admin",
-      isManager: user?.role === "manager",
-      canManageUsers: user?.role === "admin" || user?.role === "manager",
+      canManageUsers: user?.role === "owner" || user?.role === "admin",
       login,
       logout,
     }),

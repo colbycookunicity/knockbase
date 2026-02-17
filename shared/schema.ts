@@ -7,12 +7,12 @@ export const users = pgTable("users", {
   id: varchar("id")
     .primaryKey()
     .default(sql`gen_random_uuid()`),
-  username: text("username").notNull().unique(),
+  username: text("username").notNull().default(""),
   password: text("password").notNull(),
   fullName: text("full_name").notNull().default(""),
-  role: text("role").notNull().default("sales_rep"),
+  role: text("role").notNull().default("rep"),
   managerId: varchar("manager_id"),
-  email: text("email").notNull().default(""),
+  email: text("email").notNull().unique(),
   phone: text("phone").notNull().default(""),
   isActive: text("is_active").notNull().default("true"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -64,7 +64,7 @@ export const insertUserSchema = createInsertSchema(users).pick({
 });
 
 export const loginSchema = z.object({
-  username: z.string().min(1),
+  email: z.string().email(),
   password: z.string().min(1),
 });
 

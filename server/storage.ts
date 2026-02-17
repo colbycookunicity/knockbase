@@ -22,6 +22,11 @@ export async function getUserByUsername(username: string): Promise<User | undefi
   return user;
 }
 
+export async function getUserByEmail(email: string): Promise<User | undefined> {
+  const [user] = await db.select().from(users).where(eq(users.email, email));
+  return user;
+}
+
 export async function getAllUsers(): Promise<User[]> {
   return db.select().from(users);
 }
@@ -31,10 +36,10 @@ export async function getUsersByManagerId(managerId: string): Promise<User[]> {
 }
 
 export async function getVisibleUsers(currentUser: User): Promise<User[]> {
-  if (currentUser.role === "admin") {
+  if (currentUser.role === "owner") {
     return db.select().from(users);
   }
-  if (currentUser.role === "manager") {
+  if (currentUser.role === "admin") {
     const teamMembers = await getUsersByManagerId(currentUser.id);
     return [currentUser, ...teamMembers];
   }
@@ -60,10 +65,10 @@ export async function verifyPassword(user: User, password: string): Promise<bool
 }
 
 export async function getLeadsByUserRole(user: User): Promise<any[]> {
-  if (user.role === "admin") {
+  if (user.role === "owner") {
     return db.select().from(leads);
   }
-  if (user.role === "manager") {
+  if (user.role === "admin") {
     const teamMembers = await getUsersByManagerId(user.id);
     const teamIds = [user.id, ...teamMembers.map((m) => m.id)];
     return db.select().from(leads).where(inArray(leads.userId, teamIds));
@@ -120,16 +125,16 @@ export async function deleteTerritory(id: string): Promise<boolean> {
 }
 
 export async function seedAdminUser(): Promise<void> {
-  const existing = await getUserByUsername("admin");
+  const existing = await getUserByEmail("admin@knockbase.com");
   if (!existing) {
     await createUser({
       username: "admin",
       password: "admin123",
       fullName: "Admin User",
-      role: "admin",
+      role: "owner",
       email: "admin@knockbase.com",
       phone: "",
     });
-    console.log("Default admin user created (username: admin, password: admin123)");
+    console.log("Default owner user created (email: admin@knockbase.com, password: admin123)");
   }
 }

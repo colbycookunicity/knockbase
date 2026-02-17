@@ -19,7 +19,7 @@ export default function LoginScreen() {
   const { login } = useAuth();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -37,19 +37,19 @@ export default function LoginScreen() {
   };
 
   const handleLogin = async () => {
-    if (!username.trim() || !password.trim()) {
-      setError("Please enter both username and password");
+    if (!email.trim() || !password.trim()) {
+      setError("Please enter both email and password");
       shake();
       return;
     }
     setError("");
     setLoading(true);
     try {
-      await login(username.trim(), password);
+      await login(email.trim(), password);
     } catch (err: any) {
       const msg = err?.message || "Login failed";
       if (msg.includes("401")) {
-        setError("Invalid username or password");
+        setError("Invalid email or password");
       } else if (msg.includes("403")) {
         setError("Account is disabled");
       } else {
@@ -88,18 +88,19 @@ export default function LoginScreen() {
           style={[styles.formCard, { backgroundColor: theme.surface, transform: [{ translateX: shakeAnim }] }]}
         >
           <View style={[styles.inputGroup, { borderColor: theme.border }]}>
-            <Ionicons name="person-outline" size={20} color={theme.textSecondary} style={styles.inputIcon} />
+            <Ionicons name="mail-outline" size={20} color={theme.textSecondary} style={styles.inputIcon} />
             <TextInput
               style={[styles.input, { color: theme.text }]}
-              placeholder="Username"
+              placeholder="Email"
               placeholderTextColor={theme.textSecondary}
-              value={username}
-              onChangeText={setUsername}
+              value={email}
+              onChangeText={setEmail}
               autoCapitalize="none"
               autoCorrect={false}
+              keyboardType="email-address"
               returnKeyType="next"
               editable={!loading}
-              testID="username-input"
+              testID="email-input"
             />
           </View>
 
@@ -148,7 +149,7 @@ export default function LoginScreen() {
         </Animated.View>
 
         <Text style={[styles.hint, { color: theme.textSecondary }]}>
-          Contact your admin for account access
+          Contact your team owner for account access
         </Text>
       </View>
     </KeyboardAvoidingView>
