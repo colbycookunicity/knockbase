@@ -10,29 +10,29 @@
 
   .login-wrap { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
   .login-card { background: #fff; border-radius: 16px; padding: 40px; max-width: 400px; width: 100%; box-shadow: 0 4px 24px rgba(0,0,0,0.08); }
-  .login-card h1 { font-size: 24px; margin-bottom: 8px; color: #0f192f; font-style: italic; }
+  .login-card h1 { font-size: 24px; margin-bottom: 8px; color: #1E3A5F; font-style: italic; }
   .login-card p { color: #64748B; margin-bottom: 24px; font-size: 14px; }
   .form-group { margin-bottom: 16px; }
   .form-group label { display: block; font-size: 13px; font-weight: 600; color: #64748B; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
   .form-group input, .form-group select { width: 100%; height: 44px; border: 1px solid #E2E8F0; border-radius: 10px; padding: 0 14px; font-size: 15px; background: #F8FAFC; transition: border-color 0.2s; }
-  .form-group input:focus, .form-group select:focus { outline: none; border-color: #0f192f; background: #fff; }
+  .form-group input:focus, .form-group select:focus { outline: none; border-color: #1E3A5F; background: #fff; }
   .btn { height: 44px; border: none; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; padding: 0 20px; transition: opacity 0.2s; }
   .btn:hover { opacity: 0.85; }
   .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-  .btn-primary { background: #0f192f; color: #fff; width: 100%; }
+  .btn-primary { background: #1E3A5F; color: #fff; width: 100%; }
   .btn-sm { height: 34px; font-size: 13px; padding: 0 14px; border-radius: 8px; }
   .btn-danger { background: #EF4444; color: #fff; }
   .btn-outline { background: transparent; border: 1px solid #E2E8F0; color: #64748B; }
-  .btn-outline:hover { border-color: #0f192f; color: #0f192f; }
+  .btn-outline:hover { border-color: #1E3A5F; color: #1E3A5F; }
   .error-msg { color: #EF4444; font-size: 13px; margin-top: 8px; }
-  .success-msg { color: #0f192f; font-size: 13px; margin-top: 8px; }
+  .success-msg { color: #1E3A5F; font-size: 13px; margin-top: 8px; }
   .login-footer { text-align: center; margin-top: 24px; font-size: 11px; color: #94A3B8; }
-  .back-link { font-size: 13px; color: #0f192f; cursor: pointer; display: inline-block; margin-bottom: 16px; }
+  .back-link { font-size: 13px; color: #1E3A5F; cursor: pointer; display: inline-block; margin-bottom: 16px; }
   .back-link:hover { text-decoration: underline; }
   .otp-input { letter-spacing: 8px; font-size: 24px; text-align: center; font-weight: 700; }
 
   .app { display: none; }
-  .topbar { background: #0f192f; border-bottom: 1px solid #1a2a4a; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; }
+  .topbar { background: #1E3A5F; border-bottom: 1px solid #1a2a4a; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; }
   .topbar h1 { font-size: 20px; color: #fff; }
   .topbar-right { display: flex; align-items: center; gap: 12px; }
   .topbar-user { font-size: 13px; color: #94A3B8; }
@@ -59,7 +59,7 @@
   .role-badge { display: inline-block; padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
   .role-owner { background: #F3E8FF; color: #8B5CF6; }
   .role-admin { background: #DBEAFE; color: #3B82F6; }
-  .role-rep { background: #E0E7FF; color: #0f192f; }
+  .role-rep { background: #E0E7FF; color: #1E3A5F; }
 
   .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
   .status-active { background: #22C55E; }
@@ -78,7 +78,7 @@
   .role-selector button.selected { color: #fff; border-color: transparent; }
   .role-selector button[data-role="owner"].selected { background: #8B5CF6; }
   .role-selector button[data-role="admin"].selected { background: #3B82F6; }
-  .role-selector button[data-role="rep"].selected { background: #0f192f; }
+  .role-selector button[data-role="rep"].selected { background: #1E3A5F; }
   .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
   .modal-actions .btn { flex: 1; }
 
@@ -88,7 +88,7 @@
   .toggle input { opacity: 0; width: 0; height: 0; }
   .toggle .slider { position: absolute; inset: 0; background: #CBD5E1; border-radius: 12px; transition: 0.2s; }
   .toggle .slider::before { content: ""; position: absolute; width: 18px; height: 18px; left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: 0.2s; }
-  .toggle input:checked + .slider { background: #0f192f; }
+  .toggle input:checked + .slider { background: #1E3A5F; }
   .toggle input:checked + .slider::before { transform: translateX(20px); }
 
   .empty-state { text-align: center; padding: 60px 20px; color: #94A3B8; }
@@ -150,7 +150,7 @@
   <div class="stats-bar">
     <div class="stat-card"><div class="stat-value" id="statOwners" style="color:#8B5CF6">0</div><div class="stat-label">Owners</div></div>
     <div class="stat-card"><div class="stat-value" id="statAdmins" style="color:#3B82F6">0</div><div class="stat-label">Admins</div></div>
-    <div class="stat-card"><div class="stat-value" id="statReps" style="color:#0f192f">0</div><div class="stat-label">Reps</div></div>
+    <div class="stat-card"><div class="stat-value" id="statReps" style="color:#1E3A5F">0</div><div class="stat-label">Reps</div></div>
     <div class="stat-card"><div class="stat-value" id="statActive" style="color:#1E293B">0</div><div class="stat-label">Active</div></div>
   </div>
 
@@ -384,7 +384,7 @@
       const roleClass = 'role-' + u.role;
       const adminName = u.managerId ? getAdminName(u.managerId) : '';
       html += '<tr class="' + (isActive ? '' : 'inactive') + '">';
-      html += '<td><strong>' + esc(u.fullName) + '</strong>' + (isSelf ? ' <span style="color:#0f192f;font-size:11px">(you)</span>' : '') + '</td>';
+      html += '<td><strong>' + esc(u.fullName) + '</strong>' + (isSelf ? ' <span style="color:#1E3A5F;font-size:11px">(you)</span>' : '') + '</td>';
       html += '<td>' + esc(u.email) + '</td>';
       html += '<td class="hide-mobile">' + esc(u.phone || '-') + '</td>';
       html += '<td><span class="role-badge ' + roleClass + '">' + esc(u.role) + '</span></td>';
