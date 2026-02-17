@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useCallback } from "react";
+import React, { useRef, useState, useEffect, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -98,17 +98,17 @@ export function TerritoryEditorNative({ territoryId }: TerritoryEditorNativeProp
     ]);
   };
 
-  const centerRegion = (() => {
-    if (points.length > 0) {
-      const avgLat = points.reduce((s, p) => s + p.latitude, 0) / points.length;
-      const avgLng = points.reduce((s, p) => s + p.longitude, 0) / points.length;
+  const centerRegion = useMemo(() => {
+    if (existing && existing.points.length > 0) {
+      const avgLat = existing.points.reduce((s, p) => s + p.latitude, 0) / existing.points.length;
+      const avgLng = existing.points.reduce((s, p) => s + p.longitude, 0) / existing.points.length;
       return { latitude: avgLat, longitude: avgLng, latitudeDelta: 0.01, longitudeDelta: 0.01 };
     }
     if (userLocation) {
       return { ...userLocation, latitudeDelta: 0.01, longitudeDelta: 0.01 };
     }
     return { latitude: 37.78825, longitude: -122.4324, latitudeDelta: 0.01, longitudeDelta: 0.01 };
-  })();
+  }, [existing, userLocation]);
 
   return (
     <View style={styles.container}>

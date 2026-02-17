@@ -27,8 +27,9 @@ export const NativeMap = forwardRef<MapView, NativeMapProps>(function NativeMap(
       showsMyLocationButton={false}
       onLongPress={onLongPress}
     >
-      {showTerritories && territories.map((territory) =>
-        territory.points.length >= 3 ? (
+      {showTerritories && territories
+        .filter((territory) => territory.points && Array.isArray(territory.points) && territory.points.length >= 3)
+        .map((territory) => (
           <Polygon
             key={territory.id}
             coordinates={territory.points}
@@ -36,8 +37,7 @@ export const NativeMap = forwardRef<MapView, NativeMapProps>(function NativeMap(
             strokeColor={territory.color}
             strokeWidth={2}
           />
-        ) : null
-      )}
+        ))}
       {leads.map((lead) => (
         <Marker
           key={lead.id}
