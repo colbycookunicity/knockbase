@@ -8,7 +8,10 @@ import {
   Pressable,
   Platform,
   KeyboardAvoidingView,
+  ActivityIndicator,
+  Alert,
 } from "react-native";
+import * as Location from "expo-location";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
@@ -60,9 +63,36 @@ export default function LeadFormScreen() {
 
   const [pickedLat, setPickedLat] = useState(existingLead?.latitude || parseFloat(params.latitude || "0"));
   const [pickedLng, setPickedLng] = useState(existingLead?.longitude || parseFloat(params.longitude || "0"));
+  const [locating, setLocating] = useState(false);
 
   const latitude = pickedLat;
   const longitude = pickedLng;
+
+  const handleUseMyLocation = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setLocating(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Permission Denied", "Location access is required to use this feature.");
+        return;
+      }
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      const { latitude: lat, longitude: lng } = loc.coords;
+      setPickedLat(lat);
+      setPickedLng(lng);
+      const results = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
+      if (results.length > 0) {
+        const r = results[0];
+        const parts = [r.streetNumber, r.street, r.city, r.region, r.postalCode].filter(Boolean);
+        setAddress(parts.join(", "));
+      }
+    } catch {
+      Alert.alert("Error", "Could not fetch your location. Please try again.");
+    } finally {
+      setLocating(false);
+    }
+  };
 
   const toggleTag = (tag: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -178,6 +208,25 @@ export default function LeadFormScreen() {
           onChangeText={setAddress}
           theme={theme}
           icon="map-pin"
+          rightElement={
+            <Pressable
+              onPress={handleUseMyLocation}
+              disabled={locating}
+              style={({ pressed }) => [
+                styles.myLocationBtn,
+                { backgroundColor: theme.tint + "18", opacity: pressed ? 0.7 : 1 },
+              ]}
+            >
+              {locating ? (
+                <ActivityIndicator size={14} color={theme.tint} />
+              ) : (
+                <Feather name="navigation" size={14} color={theme.tint} />
+              )}
+              <Text style={[styles.myLocationText, { color: theme.tint }]}>
+                {locating ? "Locating..." : "Use My Location"}
+              </Text>
+            </Pressable>
+          }
         />
         <Pressable
           onPress={() => {
@@ -391,6 +440,7 @@ function FormInput({
   theme,
   icon,
   style,
+  rightElement,
   ...props
 }: {
   placeholder: string;
@@ -399,6 +449,7 @@ function FormInput({
   theme: any;
   icon?: string;
   style?: any;
+  rightElement?: React.ReactNode;
   [key: string]: any;
 }) {
   return (
@@ -418,6 +469,7 @@ function FormInput({
         placeholderTextColor={theme.textSecondary}
         {...props}
       />
+      {rightElement}
     </View>
   );
 }
@@ -475,6 +527,18 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     marginTop: -4,
     marginLeft: 4,
+  },
+  myLocationBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  myLocationText: {
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
   },
   pickMapBtn: {
     flexDirection: "row",
