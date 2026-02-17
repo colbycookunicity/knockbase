@@ -187,14 +187,42 @@ knockbase/
 
 Uses Shopify Storefront API v2024-10 via GraphQL. Requires `SHOPIFY_STORE_DOMAIN` and `SHOPIFY_STOREFRONT_ACCESS_TOKEN` environment variables.
 
-**Functions:**
-- `getProducts(first, after)` - Paginated product listing
-- `getProduct(id)` - Single product by ID
+### Pilot Store (Unicity Door-to-Door)
+
+- **Store:** `unicity-international-2.myshopify.com` (Shopify Plus)
+- **Sales channels:** Headless/Storefront API (active), POS (active), Online Store (hidden/password-protected)
+- **Pilot region:** Mississippi, USA (1 manager + 10 distributors)
+- **Pilot products (4):** Balance Natural Orange, Balance Mixed Berry, Unimate Lemon Ginger, Diamond Bottle 500ml
+- **Pricing strategy:** `price` field = wholesale amount, `compareAtPrice` field = retail amount
+- **Payments:** Shopify Payments (charge, capture, refund confirmed working)
+- **Customer sync:** Shopify customer email -> Unicity customer_ID written back to Shopify metafield (`custom.customer_id`)
+- **Order flow:** Shopify order -> daily sync to Unicity Portal (manual Phase 1, automated webhook Phase 2)
+
+### Architecture
+
+**Three Shopify sales channels:**
+1. **Online Store** - Hidden (password protected), not used for pilot
+2. **Headless/Storefront API** - KnockBase app reads products and creates checkouts via this channel
+3. **POS** - Distributors use Shopify POS app with tap-to-pay card readers for in-person sales
+
+**Data flow:**
+- KnockBase -> Storefront API -> products/checkout
+- Shopify -> Unicity: Order data (SKU, quantity, price, customer email, POS staff) for commission/PV/BV
+- Unicity -> Shopify: customer_ID written to Shopify customer metafield for relationship mapping
+
+### Server Functions (server/shopify.ts)
+- `getProducts(first, after)` - Paginated product listing with compareAtPrice
+- `getProduct(id)` - Single product by ID with full variant/pricing data
 - `searchProducts(query, first)` - Full-text product search
-- `createCheckout(lineItems)` - Create cart and return checkout URL
+- `createCheckout(lineItems)` - Create cart and return Shopify checkout URL
 - `getShopInfo()` - Get shop name and description
 
-**Frontend flow:** Shop tab (`app/(tabs)/shop.tsx`) lists products -> tap opens product detail (`app/product-detail.tsx`) with image gallery, variant selection, quantity picker -> checkout redirects to Shopify hosted checkout page.
+### Frontend Flow
+Shop tab (`app/(tabs)/shop.tsx`) lists products with wholesale/retail pricing -> tap opens product detail (`app/product-detail.tsx`) with image gallery, variant selection, quantity picker -> "Buy Now" creates a Shopify cart and opens the hosted checkout URL.
+
+### Pricing Display
+- **Product cards:** Show wholesale price prominently (emerald), retail price as strikethrough
+- **Product detail:** Wholesale price labeled "Wholesale", compareAtPrice labeled "Retail" with strikethrough
 
 ## Build & Deploy
 

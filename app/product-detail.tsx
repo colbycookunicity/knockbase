@@ -221,14 +221,20 @@ export default function ProductDetailScreen() {
 
           {selectedVariant && (
             <View style={styles.priceSection}>
-              <Text style={[styles.price, { color: theme.text }]}>
-                {formatPrice(selectedVariant.price.amount, selectedVariant.price.currencyCode)}
-              </Text>
+              <View style={styles.priceRow}>
+                <Text style={[styles.price, { color: theme.tint }]}>
+                  {formatPrice(selectedVariant.price.amount, selectedVariant.price.currencyCode)}
+                </Text>
+                <Text style={[styles.priceLabel, { color: theme.tint }]}>Wholesale</Text>
+              </View>
               {selectedVariant.compareAtPrice &&
                 parseFloat(selectedVariant.compareAtPrice.amount) > parseFloat(selectedVariant.price.amount) && (
-                  <Text style={[styles.comparePrice, { color: theme.textSecondary }]}>
-                    {formatPrice(selectedVariant.compareAtPrice.amount, selectedVariant.compareAtPrice.currencyCode)}
-                  </Text>
+                  <View style={styles.priceRow}>
+                    <Text style={[styles.comparePrice, { color: theme.textSecondary }]}>
+                      {formatPrice(selectedVariant.compareAtPrice.amount, selectedVariant.compareAtPrice.currencyCode)}
+                    </Text>
+                    <Text style={[styles.comparePriceLabel, { color: theme.textSecondary }]}>Retail</Text>
+                  </View>
                 )}
             </View>
           )}
@@ -377,9 +383,12 @@ const styles = StyleSheet.create({
   infoSection: { padding: 16, marginTop: 8, gap: 6 },
   vendor: { fontSize: 12, fontFamily: "Inter_600SemiBold", textTransform: "uppercase", letterSpacing: 0.5 },
   productTitle: { fontSize: 22, fontFamily: "Inter_700Bold", lineHeight: 28 },
-  priceSection: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 4 },
+  priceSection: { gap: 4, marginTop: 4 },
+  priceRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   price: { fontSize: 22, fontFamily: "Inter_700Bold" },
+  priceLabel: { fontSize: 12, fontFamily: "Inter_600SemiBold", textTransform: "uppercase", letterSpacing: 0.5 },
   comparePrice: { fontSize: 16, fontFamily: "Inter_400Regular", textDecorationLine: "line-through" },
+  comparePriceLabel: { fontSize: 11, fontFamily: "Inter_500Medium" },
   tagsRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 6 },
   tag: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, borderWidth: 1 },
   tagText: { fontSize: 12, fontFamily: "Inter_500Medium" },

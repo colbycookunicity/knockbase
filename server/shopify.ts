@@ -39,6 +39,10 @@ export async function getProducts(first = 20, after?: string) {
               minVariantPrice { amount currencyCode }
               maxVariantPrice { amount currencyCode }
             }
+            compareAtPriceRange {
+              minVariantPrice { amount currencyCode }
+              maxVariantPrice { amount currencyCode }
+            }
             images(first: 5) {
               edges {
                 node { url altText width height }
@@ -90,6 +94,10 @@ export async function getProduct(id: string) {
           minVariantPrice { amount currencyCode }
           maxVariantPrice { amount currencyCode }
         }
+        compareAtPriceRange {
+          minVariantPrice { amount currencyCode }
+          maxVariantPrice { amount currencyCode }
+        }
         images(first: 10) {
           edges {
             node { url altText width height }
@@ -136,6 +144,10 @@ export async function searchProducts(searchQuery: string, first = 20) {
               minVariantPrice { amount currencyCode }
               maxVariantPrice { amount currencyCode }
             }
+            compareAtPriceRange {
+              minVariantPrice { amount currencyCode }
+              maxVariantPrice { amount currencyCode }
+            }
             images(first: 1) {
               edges {
                 node { url altText }
@@ -148,6 +160,7 @@ export async function searchProducts(searchQuery: string, first = 20) {
                   title
                   availableForSale
                   price { amount currencyCode }
+                  compareAtPrice { amount currencyCode }
                 }
               }
             }

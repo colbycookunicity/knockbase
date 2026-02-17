@@ -30,12 +30,17 @@ interface ShopifyProduct {
     minVariantPrice: { amount: string; currencyCode: string };
     maxVariantPrice: { amount: string; currencyCode: string };
   };
+  compareAtPriceRange?: {
+    minVariantPrice: { amount: string; currencyCode: string };
+    maxVariantPrice: { amount: string; currencyCode: string };
+  };
   images: { url: string; altText: string | null }[];
   variants: {
     id: string;
     title: string;
     availableForSale: boolean;
     price: { amount: string; currencyCode: string };
+    compareAtPrice: { amount: string; currencyCode: string } | null;
   }[];
 }
 
@@ -49,6 +54,10 @@ function ProductCard({ product, onPress, theme }: { product: ShopifyProduct; onP
   const minPrice = product.priceRange.minVariantPrice;
   const maxPrice = product.priceRange.maxVariantPrice;
   const samePrice = minPrice.amount === maxPrice.amount;
+  // Pricing tier: price = wholesale, compareAtPrice = retail
+  const firstVariant = product.variants[0];
+  const retailPrice = firstVariant?.compareAtPrice;
+  const hasRetailPrice = retailPrice && parseFloat(retailPrice.amount) > parseFloat(minPrice.amount);
 
   return (
     <Pressable style={[styles.card, { backgroundColor: theme.surface }]} onPress={onPress}>
@@ -68,12 +77,19 @@ function ProductCard({ product, onPress, theme }: { product: ShopifyProduct; onP
         <Text style={[styles.cardTitle, { color: theme.text }]} numberOfLines={2}>
           {product.title}
         </Text>
-        <View style={styles.priceRow}>
-          <Text style={[styles.priceText, { color: theme.text }]}>
-            {samePrice
-              ? formatPrice(minPrice.amount, minPrice.currencyCode)
-              : `${formatPrice(minPrice.amount, minPrice.currencyCode)} - ${formatPrice(maxPrice.amount, maxPrice.currencyCode)}`}
-          </Text>
+        <View style={styles.priceCol}>
+          <View style={styles.priceRow}>
+            <Text style={[styles.priceText, { color: theme.tint }]}>
+              {samePrice
+                ? formatPrice(minPrice.amount, minPrice.currencyCode)
+                : `${formatPrice(minPrice.amount, minPrice.currencyCode)} - ${formatPrice(maxPrice.amount, maxPrice.currencyCode)}`}
+            </Text>
+          </View>
+          {hasRetailPrice && (
+            <Text style={[styles.retailPriceText, { color: theme.textSecondary }]}>
+              Retail {formatPrice(retailPrice.amount, retailPrice.currencyCode)}
+            </Text>
+          )}
           {!product.availableForSale && (
             <View style={[styles.outOfStockBadge, { backgroundColor: theme.danger + "20" }]}>
               <Text style={[styles.outOfStockText, { color: theme.danger }]}>Sold out</Text>
@@ -246,9 +262,11 @@ const styles = StyleSheet.create({
   cardBody: { padding: 10, gap: 4 },
   vendorText: { fontSize: 11, fontFamily: "Inter_600SemiBold", textTransform: "uppercase", letterSpacing: 0.5 },
   cardTitle: { fontSize: 14, fontFamily: "Inter_600SemiBold", lineHeight: 18 },
-  priceRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 },
+  priceCol: { marginTop: 2, gap: 1 },
+  priceRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   priceText: { fontSize: 14, fontFamily: "Inter_700Bold" },
-  outOfStockBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  retailPriceText: { fontSize: 11, fontFamily: "Inter_400Regular", textDecorationLine: "line-through" },
+  outOfStockBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, alignSelf: "flex-start" },
   outOfStockText: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
   emptyContainer: { alignItems: "center", justifyContent: "center", paddingTop: 80, paddingHorizontal: 40, gap: 12 },
   emptyTitle: { fontSize: 18, fontFamily: "Inter_700Bold", textAlign: "center" },
