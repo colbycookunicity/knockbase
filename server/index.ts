@@ -217,10 +217,10 @@ function configureExpoAndLanding(app: express.Application) {
   });
 
   app.use("/assets", express.static(path.resolve(process.cwd(), "assets")));
-  app.use(express.static(path.resolve(process.cwd(), "static-build")));
+  app.use(express.static(path.resolve(process.cwd(), "dist")));
 
-  // SPA catch-all: serve index.html from static web build for client-side routes
-  const webIndexPath = path.resolve(process.cwd(), "static-build", "web", "index.html");
+  // SPA catch-all: serve index.html from Expo web export for client-side routes
+  const webIndexPath = path.resolve(process.cwd(), "dist", "index.html");
   app.use((req: Request, res: Response, next: NextFunction) => {
     if (req.path.startsWith("/api") || req.method !== "GET") {
       return next();
