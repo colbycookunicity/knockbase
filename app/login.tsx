@@ -15,26 +15,17 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@/lib/auth-context";
 import { useTheme } from "@/lib/useTheme";
 
-type LoginMode = "password" | "otp";
 type OtpStep = "email" | "code";
 
 export default function LoginScreen() {
-  const { login, requestOtp, verifyOtp } = useAuth();
+  const { requestOtp, verifyOtp } = useAuth();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
 
-  // Shared state
-  const [mode, setMode] = useState<LoginMode>("otp");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const shakeAnim = useRef(new Animated.Value(0)).current;
 
-  // Password login state
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-
-  // OTP login state
   const [otpEmail, setOtpEmail] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [otpStep, setOtpStep] = useState<OtpStep>("email");
@@ -64,31 +55,6 @@ export default function LoginScreen() {
         return prev - 1;
       });
     }, 1000);
-  };
-
-  const handlePasswordLogin = async () => {
-    if (!email.trim() || !password.trim()) {
-      setError("Please enter both email and password");
-      shake();
-      return;
-    }
-    setError("");
-    setLoading(true);
-    try {
-      await login(email.trim(), password);
-    } catch (err: any) {
-      const msg = err?.message || "Login failed";
-      if (msg.includes("401")) {
-        setError("Invalid email or password");
-      } else if (msg.includes("403")) {
-        setError("Account is disabled");
-      } else {
-        setError("Connection error. Please try again.");
-      }
-      shake();
-    } finally {
-      setLoading(false);
-    }
   };
 
   const handleRequestOtp = async () => {
@@ -172,13 +138,6 @@ export default function LoginScreen() {
     }
   };
 
-  const switchMode = (newMode: LoginMode) => {
-    setMode(newMode);
-    setError("");
-    setOtpStep("email");
-    setOtpCode("");
-  };
-
   const webTopInset = Platform.OS === "web" ? 67 : 0;
 
   return (
@@ -202,84 +161,10 @@ export default function LoginScreen() {
           </Text>
         </View>
 
-        {/* Mode Tabs */}
-        <View style={[styles.tabRow, { backgroundColor: theme.surface }]}>
-          <Pressable
-            style={[styles.tab, mode === "otp" && { backgroundColor: theme.tint }]}
-            onPress={() => switchMode("otp")}
-          >
-            <Ionicons
-              name="mail-outline"
-              size={16}
-              color={mode === "otp" ? "#FFF" : theme.textSecondary}
-              style={{ marginRight: 6 }}
-            />
-            <Text style={[styles.tabText, { color: mode === "otp" ? "#FFF" : theme.textSecondary }]}>
-              Email Code
-            </Text>
-          </Pressable>
-          <Pressable
-            style={[styles.tab, mode === "password" && { backgroundColor: theme.tint }]}
-            onPress={() => switchMode("password")}
-          >
-            <Ionicons
-              name="lock-closed-outline"
-              size={16}
-              color={mode === "password" ? "#FFF" : theme.textSecondary}
-              style={{ marginRight: 6 }}
-            />
-            <Text style={[styles.tabText, { color: mode === "password" ? "#FFF" : theme.textSecondary }]}>
-              Password
-            </Text>
-          </Pressable>
-        </View>
-
         <Animated.View
           style={[styles.formCard, { backgroundColor: theme.surface, transform: [{ translateX: shakeAnim }] }]}
         >
-          {mode === "password" ? (
-            <>
-              <View style={[styles.inputGroup, { borderColor: theme.border }]}>
-                <Ionicons name="mail-outline" size={20} color={theme.textSecondary} style={styles.inputIcon} />
-                <TextInput
-                  style={[styles.input, { color: theme.text }]}
-                  placeholder="Email"
-                  placeholderTextColor={theme.textSecondary}
-                  value={email}
-                  onChangeText={setEmail}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  keyboardType="email-address"
-                  returnKeyType="next"
-                  editable={!loading}
-                  testID="email-input"
-                />
-              </View>
-
-              <View style={[styles.inputGroup, { borderColor: theme.border }]}>
-                <Ionicons name="lock-closed-outline" size={20} color={theme.textSecondary} style={styles.inputIcon} />
-                <TextInput
-                  style={[styles.input, { color: theme.text, flex: 1 }]}
-                  placeholder="Password"
-                  placeholderTextColor={theme.textSecondary}
-                  value={password}
-                  onChangeText={setPassword}
-                  secureTextEntry={!showPassword}
-                  returnKeyType="done"
-                  onSubmitEditing={handlePasswordLogin}
-                  editable={!loading}
-                  testID="password-input"
-                />
-                <Pressable onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
-                  <Ionicons
-                    name={showPassword ? "eye-off-outline" : "eye-outline"}
-                    size={20}
-                    color={theme.textSecondary}
-                  />
-                </Pressable>
-              </View>
-            </>
-          ) : otpStep === "email" ? (
+          {otpStep === "email" ? (
             <>
               <Text style={[styles.otpInstructions, { color: theme.textSecondary }]}>
                 Enter your email to receive a one-time login code
@@ -358,13 +243,7 @@ export default function LoginScreen() {
 
           <Pressable
             style={[styles.loginBtn, { backgroundColor: theme.tint, opacity: loading ? 0.7 : 1 }]}
-            onPress={
-              mode === "password"
-                ? handlePasswordLogin
-                : otpStep === "email"
-                  ? handleRequestOtp
-                  : handleVerifyOtp
-            }
+            onPress={otpStep === "email" ? handleRequestOtp : handleVerifyOtp}
             disabled={loading}
             testID="login-button"
           >
@@ -372,11 +251,7 @@ export default function LoginScreen() {
               <ActivityIndicator color="#FFF" size="small" />
             ) : (
               <Text style={styles.loginBtnText}>
-                {mode === "password"
-                  ? "Sign In"
-                  : otpStep === "email"
-                    ? "Send Code"
-                    : "Verify & Sign In"}
+                {otpStep === "email" ? "Send Code" : "Verify & Sign In"}
               </Text>
             )}
           </Pressable>
@@ -421,24 +296,6 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     marginTop: 6,
   },
-  tabRow: {
-    flexDirection: "row",
-    borderRadius: 12,
-    padding: 4,
-    marginBottom: 12,
-  },
-  tab: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 10,
-    borderRadius: 10,
-  },
-  tabText: {
-    fontSize: 14,
-    fontFamily: "Inter_600SemiBold",
-  },
   formCard: {
     borderRadius: 16,
     padding: 20,
@@ -460,9 +317,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: "Inter_400Regular",
     height: "100%" as any,
-  },
-  eyeBtn: {
-    padding: 4,
   },
   otpInstructions: {
     fontSize: 14,
