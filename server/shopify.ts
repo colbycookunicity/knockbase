@@ -228,9 +228,35 @@ export async function createCheckout(lineItems: { variantId: string; quantity: n
     throw new Error(data.cartCreate.userErrors[0].message);
   }
   const cart = data.cartCreate.cart;
+
+  // Shopify returns checkoutUrl using the store's primary domain. If that domain
+  // points to a non-Shopify site (e.g. www.unicity.com), the cart URL won't
+  // resolve to Shopify's checkout. Rewrite it to use the Shopify store domain
+  // so checkout stays within Shopify's hosted checkout system.
+  let checkoutUrl: string = cart.checkoutUrl;
+  const domain = process.env.SHOPIFY_STORE_DOMAIN || "";
+  if (domain && checkoutUrl) {
+    try {
+      const parsed = new URL(checkoutUrl);
+      const shopifyHost = domain.replace(/^https?:\/\//, "");
+      if (parsed.hostname !== shopifyHost) {
+        parsed.hostname = shopifyHost;
+        // Remove any locale path prefix injected by the custom domain (e.g. /usa/en)
+        // Shopify cart permalinks always start with /cart/
+        const cartPathMatch = parsed.pathname.match(/(\/cart\/.*)/);
+        if (cartPathMatch) {
+          parsed.pathname = cartPathMatch[1];
+        }
+        checkoutUrl = parsed.toString();
+      }
+    } catch {
+      // If URL parsing fails, use the original URL
+    }
+  }
+
   return {
     id: cart.id,
-    checkoutUrl: cart.checkoutUrl,
+    checkoutUrl,
     totalQuantity: cart.totalQuantity,
     cost: cart.cost,
     lines: cart.lines.edges.map((e: any) => e.node),
