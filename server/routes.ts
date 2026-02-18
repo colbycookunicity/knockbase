@@ -116,8 +116,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       await verifyOtp(email.trim().toLowerCase(), code.trim());
 
+      await storage.updateUser(user.id, { lastLoginAt: new Date() });
+
       req.session.userId = user.id;
-      res.json({ user: sanitizeUser(user), verified: true });
+      res.json({ user: sanitizeUser({ ...user, lastLoginAt: new Date() }), verified: true });
     } catch (err) {
       if (err instanceof HydraError) {
         return res.status(400).json({ message: err.message, code: err.code });

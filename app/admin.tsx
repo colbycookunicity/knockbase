@@ -234,11 +234,27 @@ export default function AdminScreen() {
     return { ownerCount, adminCount, repCount, activeCount, total: users.length };
   }, [users]);
 
+  const formatLastLogin = (lastLoginAt: string | null | undefined) => {
+    if (!lastLoginAt) return "Never";
+    const date = new Date(lastLoginAt);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    if (diffMins < 1) return "Just now";
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: date.getFullYear() !== now.getFullYear() ? "numeric" : undefined });
+  };
+
   const renderUser = ({ item }: { item: User }) => {
     const isSelf = item.id === currentUser?.id;
     const isActive = item.isActive === "true";
     const roleConf = ROLE_CONFIG[item.role] || ROLE_CONFIG.rep;
     const adminName = getAdminName(item.managerId);
+    const lastLogin = formatLastLogin(item.lastLoginAt);
 
     return (
       <View style={[styles.userCard, { backgroundColor: theme.surface, opacity: isActive ? 1 : 0.6 }]}>
@@ -253,6 +269,9 @@ export default function AdminScreen() {
             <Text style={[styles.userMeta, { color: theme.textSecondary }]} numberOfLines={1}>
               {item.email}
               {adminName ? ` \u00B7 ${adminName}'s team` : ""}
+            </Text>
+            <Text style={[styles.userLastLogin, { color: theme.textSecondary }]} numberOfLines={1}>
+              Last login: {lastLogin}
             </Text>
           </View>
           <View style={styles.userActions}>
@@ -586,6 +605,7 @@ const styles = StyleSheet.create({
   userInfo: { flex: 1 },
   userName: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
   userMeta: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
+  userLastLogin: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 2, opacity: 0.7 },
   userActions: { flexDirection: "row", alignItems: "center", gap: 6 },
   roleBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   roleBadgeText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },

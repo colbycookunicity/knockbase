@@ -11,6 +11,7 @@ export interface User {
   email: string;
   phone: string;
   isActive: string;
+  lastLoginAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
