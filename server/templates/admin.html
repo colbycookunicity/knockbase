@@ -125,6 +125,25 @@
   .org-description { font-size: 13px; color: #64748B; line-height: 1.5; padding: 16px 24px 0; }
   .org-empty { font-size: 13px; color: #94A3B8; padding-left: 32px; }
 
+  /* POS Sales tab */
+  .pos-period-bar { display: flex; gap: 4px; padding: 12px 24px; background: #fff; border-bottom: 1px solid #E2E8F0; }
+  .pos-period-btn { padding: 8px 18px; border-radius: 20px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; background: transparent; color: #64748B; transition: all 0.2s; }
+  .pos-period-btn:hover { background: #F1F5F9; }
+  .pos-period-btn.active { background: #10B981; color: #fff; }
+  .pos-summary-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; padding: 20px 24px; }
+  .pos-staff-card { background: #fff; border-radius: 12px; padding: 18px; box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
+  .pos-staff-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .pos-staff-avatar { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px; color: #fff; background: #10B981; }
+  .pos-staff-name { font-size: 16px; font-weight: 600; }
+  .pos-staff-location { font-size: 11px; color: #64748B; margin-top: 2px; }
+  .pos-staff-stats { display: flex; flex-wrap: wrap; gap: 4px; }
+  .pos-staff-stat { flex: 1; min-width: 70px; text-align: center; padding: 8px 4px; }
+  .pos-staff-stat-value { font-size: 20px; font-weight: 700; }
+  .pos-staff-stat-label { font-size: 10px; color: #64748B; text-transform: uppercase; letter-spacing: 0.3px; margin-top: 2px; }
+  .pos-totals-card { background: #fff; border-radius: 12px; padding: 20px; margin: 20px 24px 0; box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
+  .pos-totals-card h3 { font-size: 15px; font-weight: 600; margin-bottom: 14px; }
+  .pos-linked-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; padding: 2px 8px; border-radius: 8px; background: #D1FAE5; color: #059669; font-weight: 600; }
+
   .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 100; align-items: center; justify-content: center; padding: 20px; }
   .modal-overlay.active { display: flex; }
   .modal { background: #fff; border-radius: 16px; padding: 28px; max-width: 480px; width: 100%; max-height: 85vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.15); }
@@ -216,6 +235,7 @@
     <button class="tab-btn active" data-tab="team">&#128101; Team</button>
     <button class="tab-btn" data-tab="leads">&#128196; Leads</button>
     <button class="tab-btn" data-tab="performance">&#128200; Stats</button>
+    <button class="tab-btn" data-tab="pos-sales" id="posTabBtn" style="display:none">&#128176; POS Sales</button>
     <button class="tab-btn" data-tab="organization" id="orgTabBtn" style="display:none">&#127760; Org</button>
   </div>
 
@@ -259,6 +279,13 @@
     </div>
     <div id="teamTotalsWrap"></div>
     <div id="perfGridWrap" class="perf-grid"></div>
+  </div>
+
+  <!-- POS SALES TAB -->
+  <div id="tab-pos-sales" class="tab-content">
+    <div class="pos-period-bar" id="posPeriodBar"></div>
+    <div id="posTotalsWrap"></div>
+    <div id="posGridWrap" class="pos-summary-grid"><div class="loading">Loading POS sales data...</div></div>
   </div>
 
   <!-- ORGANIZATION TAB -->
@@ -313,6 +340,10 @@
     <div class="form-group" id="orgUnitGroup">
       <label>Org Unit</label>
       <select id="formOrgUnit"><option value="">None</option></select>
+    </div>
+    <div class="form-group">
+      <label>Shopify POS Staff Name</label>
+      <input type="text" id="formShopifyStaff" placeholder="e.g. Walter, Colby (must match Shopify POS exactly)">
     </div>
     <div class="switch-row" id="activeRow" style="display:none">
       <label>Account Active</label>
@@ -374,6 +405,11 @@
   let statsPeriod = 'all';
   let statsOrgFilter = '';
   let statsLoaded = false;
+
+  // POS Sales state
+  let posSummary = null;
+  let posDays = 7;
+  let posLoaded = false;
 
   // Org state
   let orgUnits = [];
@@ -453,6 +489,10 @@
     if (currentUser.role === 'owner') {
       document.getElementById('orgTabBtn').style.display = '';
     }
+    // Show POS tab for owners and managers
+    if (currentUser.role === 'owner' || currentUser.role === 'manager') {
+      document.getElementById('posTabBtn').style.display = '';
+    }
     loadUsers();
   }
 
@@ -467,6 +507,7 @@
       // Lazy load tab data
       if (btn.dataset.tab === 'leads' && !leadsLoaded) loadAdminLeads();
       if (btn.dataset.tab === 'performance' && !statsLoaded) loadTeamStats();
+      if (btn.dataset.tab === 'pos-sales' && !posLoaded) loadPosSales();
       if (btn.dataset.tab === 'organization') loadOrgUnits();
     });
   });
@@ -587,7 +628,7 @@
       const mgrName = u.managerId ? getManagerName(u.managerId) : '';
       const orgName = u.orgUnitId ? getOrgUnitName(u.orgUnitId) : '';
       html += '<tr class="' + (isActive ? '' : 'inactive') + '">';
-      html += '<td><strong>' + esc(u.fullName) + '</strong>' + (isSelf ? ' <span style="color:#1E3A5F;font-size:11px">(you)</span>' : '') + '</td>';
+      html += '<td><strong>' + esc(u.fullName) + '</strong>' + (isSelf ? ' <span style="color:#1E3A5F;font-size:11px">(you)</span>' : '') + (u.shopifyStaffName ? ' <span class="pos-linked-badge" style="font-size:9px;padding:1px 5px">POS: ' + esc(u.shopifyStaffName) + '</span>' : '') + '</td>';
       html += '<td>' + esc(u.email) + '</td>';
       html += '<td class="hide-mobile">' + esc(u.phone || '-') + '</td>';
       html += '<td><span class="role-badge ' + roleClass + '">' + esc(u.role) + '</span></td>';
@@ -825,6 +866,120 @@
     document.getElementById('perfGridWrap').innerHTML = html;
   }
 
+  // ========== POS SALES TAB ==========
+  async function loadPosSales() {
+    document.getElementById('posGridWrap').innerHTML = '<div class="loading">Loading POS sales data...</div>';
+    try {
+      posSummary = await api('GET', '/api/admin/pos-summary?days=' + posDays);
+      posLoaded = true;
+      renderPosPeriodBar();
+      renderPosSales();
+    } catch (err) {
+      console.error('POS sales error:', err);
+      document.getElementById('posGridWrap').innerHTML = '<div class="empty-state"><p>Failed to load POS sales data.<br><small style="color:#94A3B8">Make sure SHOPIFY_ADMIN_ACCESS_TOKEN is set and has read_analytics scope.</small></p></div>';
+    }
+  }
+
+  function renderPosPeriodBar() {
+    const bar = document.getElementById('posPeriodBar');
+    const periods = [
+      { days: 1, label: 'Today' },
+      { days: 7, label: '7 Days' },
+      { days: 30, label: '30 Days' },
+      { days: 90, label: '90 Days' },
+    ];
+    bar.innerHTML = periods.map(p =>
+      '<button class="pos-period-btn ' + (posDays === p.days ? 'active' : '') + '" data-days="' + p.days + '">' + p.label + '</button>'
+    ).join('');
+    bar.querySelectorAll('.pos-period-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        posDays = parseInt(btn.dataset.days);
+        posLoaded = false;
+        loadPosSales();
+      });
+    });
+  }
+
+  function renderPosSales() {
+    if (!posSummary || !posSummary.rows) {
+      document.getElementById('posGridWrap').innerHTML = '<div class="empty-state"><p>No POS sales data found</p></div>';
+      return;
+    }
+
+    const rows = posSummary.rows;
+
+    // Build staff-to-user mapping
+    const staffUserMap = {};
+    allUsers.forEach(u => {
+      if (u.shopifyStaffName) {
+        staffUserMap[u.shopifyStaffName.toLowerCase()] = u;
+      }
+    });
+
+    // Find totals row (staff_member_name is null or empty for totals)
+    const totalsRow = rows.find(r => !r.staff_member_name);
+    const staffRows = rows.filter(r => r.staff_member_name);
+
+    // Render totals
+    const totalsWrap = document.getElementById('posTotalsWrap');
+    if (totalsRow) {
+      totalsWrap.innerHTML = '<div class="pos-totals-card"><h3>Team POS Totals (' + posDays + ' day' + (posDays !== 1 ? 's' : '') + ')</h3><div class="pos-staff-stats">' +
+        '<div class="pos-staff-stat"><div class="pos-staff-stat-value" style="color:#3B82F6">' + (totalsRow.orders || 0) + '</div><div class="pos-staff-stat-label">Orders</div></div>' +
+        '<div class="pos-staff-stat"><div class="pos-staff-stat-value" style="color:#10B981">' + formatCurrency(totalsRow.total_sales) + '</div><div class="pos-staff-stat-label">Total Sales</div></div>' +
+        '<div class="pos-staff-stat"><div class="pos-staff-stat-value" style="color:#8B5CF6">' + formatCurrency(totalsRow.net_sales) + '</div><div class="pos-staff-stat-label">Net Sales</div></div>' +
+        '<div class="pos-staff-stat"><div class="pos-staff-stat-value" style="color:#F59E0B">' + formatCurrency(totalsRow.average_order_value) + '</div><div class="pos-staff-stat-label">Avg Order</div></div>' +
+        '<div class="pos-staff-stat"><div class="pos-staff-stat-value" style="color:#1E293B">' + formatCurrency(totalsRow.gross_sales) + '</div><div class="pos-staff-stat-label">Gross Sales</div></div>' +
+        '</div></div>';
+    } else {
+      totalsWrap.innerHTML = '';
+    }
+
+    // Render per-staff cards
+    const gridWrap = document.getElementById('posGridWrap');
+    if (!staffRows.length) {
+      gridWrap.innerHTML = '<div class="empty-state"><p>No POS staff sales data for this period</p></div>';
+      return;
+    }
+
+    let html = '';
+    for (const row of staffRows) {
+      const name = row.staff_member_name || 'Unknown';
+      const initials = name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+      const linkedUser = staffUserMap[name.toLowerCase()];
+      const avatarColor = linkedUser ? '#10B981' : '#94A3B8';
+
+      html += '<div class="pos-staff-card">';
+      html += '<div class="pos-staff-header">';
+      html += '<div class="pos-staff-avatar" style="background:' + avatarColor + '">' + esc(initials) + '</div>';
+      html += '<div><div class="pos-staff-name">' + esc(name);
+      if (linkedUser) {
+        html += ' <span class="pos-linked-badge">&#10003; Linked</span>';
+      }
+      html += '</div>';
+      if (linkedUser) {
+        html += '<div class="pos-staff-location">' + esc(linkedUser.email) + '</div>';
+      }
+      html += '</div></div>';
+
+      html += '<div class="pos-staff-stats">';
+      html += '<div class="pos-staff-stat"><div class="pos-staff-stat-value" style="color:#3B82F6">' + (row.orders || 0) + '</div><div class="pos-staff-stat-label">Orders</div></div>';
+      html += '<div class="pos-staff-stat"><div class="pos-staff-stat-value" style="color:#10B981">' + formatCurrency(row.total_sales) + '</div><div class="pos-staff-stat-label">Total Sales</div></div>';
+      html += '<div class="pos-staff-stat"><div class="pos-staff-stat-value" style="color:#8B5CF6">' + formatCurrency(row.net_sales) + '</div><div class="pos-staff-stat-label">Net Sales</div></div>';
+      html += '<div class="pos-staff-stat"><div class="pos-staff-stat-value" style="color:#F59E0B">' + formatCurrency(row.average_order_value) + '</div><div class="pos-staff-stat-label">Avg Order</div></div>';
+      html += '<div class="pos-staff-stat"><div class="pos-staff-stat-value" style="color:#EF4444">' + formatCurrency(row.discounts) + '</div><div class="pos-staff-stat-label">Discounts</div></div>';
+      html += '<div class="pos-staff-stat"><div class="pos-staff-stat-value" style="color:#64748B">' + formatCurrency(row.taxes) + '</div><div class="pos-staff-stat-label">Taxes</div></div>';
+      html += '</div></div>';
+    }
+    gridWrap.innerHTML = html;
+  }
+
+  function formatCurrency(val) {
+    if (val == null || val === '') return '$0';
+    const num = parseFloat(val);
+    if (isNaN(num)) return '$0';
+    return '$' + num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
   // ========== ORGANIZATION TAB ==========
   async function loadOrgUnits() {
     try {
@@ -917,6 +1072,7 @@
     updateRoleUI();
     updateManagerDropdown(user ? user.managerId : null);
     updateOrgUnitDropdown(user ? user.orgUnitId : null);
+    document.getElementById('formShopifyStaff').value = user ? (user.shopifyStaffName || '') : '';
     roleBtns.forEach(btn => {
       if (currentUser.role === 'manager') { btn.style.display = btn.dataset.role === 'rep' ? '' : 'none'; }
       else { btn.style.display = ''; }
@@ -962,7 +1118,8 @@
     const errEl = document.getElementById('formError');
     errEl.style.display = 'none';
     if (!fullName || !email) { errEl.textContent = 'Full name and email are required'; errEl.style.display = 'block'; return; }
-    const body = { fullName, email, username, phone, role: selectedRole, orgUnitId };
+    const shopifyStaffName = document.getElementById('formShopifyStaff').value.trim() || null;
+    const body = { fullName, email, username, phone, role: selectedRole, orgUnitId, shopifyStaffName };
     if (selectedRole === 'rep' && managerId) body.managerId = managerId;
     if (selectedRole !== 'rep') body.managerId = null;
     if (editingUserId) body.isActive = isActive;

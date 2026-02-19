@@ -300,9 +300,10 @@ export async function runMigrations(): Promise<void> {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP
   `).catch(() => {});
 
-  // Add org_unit_id column to users if it doesn't exist
+  // Add org_unit_id and shopify_staff_name columns to users if they don't exist
   await pool.query(`
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS org_unit_id VARCHAR
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS org_unit_id VARCHAR;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS shopify_staff_name TEXT
   `).catch(() => {});
 
   // Create org_units table if it doesn't exist

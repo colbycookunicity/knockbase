@@ -22,7 +22,7 @@ import { apiRequest } from "@/lib/query-client";
 import { LEAD_STATUS_CONFIG, LeadStatus } from "@/lib/types";
 
 type Role = "owner" | "manager" | "rep";
-type AdminTab = "team" | "leads" | "performance" | "organization";
+type AdminTab = "team" | "leads" | "performance" | "pos-sales" | "organization";
 
 const ROLE_CONFIG: Record<Role, { label: string; icon: string; color: string }> = {
   owner: { label: "Owner", icon: "shield", color: "#8B5CF6" },
@@ -132,6 +132,14 @@ export default function AdminScreen() {
   const [leadOrgFilter, setLeadOrgFilter] = useState<string>("");
   const [statsOrgFilter, setStatsOrgFilter] = useState<string>("");
 
+  // POS Sales state
+  const [posSummary, setPosSummary] = useState<any>(null);
+  const [posDays, setPosDays] = useState(7);
+  const [posLoading, setPosLoading] = useState(false);
+
+  // User form: shopify staff name
+  const [formShopifyStaffName, setFormShopifyStaffName] = useState("");
+
   const fetchUsers = useCallback(async () => {
     try {
       const res = await apiRequest("GET", "/api/users");
@@ -172,6 +180,20 @@ export default function AdminScreen() {
     }
   }, []);
 
+  const fetchPosSales = useCallback(async (days: number = 7) => {
+    setPosLoading(true);
+    try {
+      const res = await apiRequest("GET", `/api/admin/pos-summary?days=${days}`);
+      const data = await res.json();
+      setPosSummary(data);
+    } catch (err) {
+      console.error("Failed to fetch POS sales:", err);
+      setPosSummary(null);
+    } finally {
+      setPosLoading(false);
+    }
+  }, []);
+
   const fetchOrgUnits = useCallback(async () => {
     setOrgLoading(true);
     try {
@@ -193,6 +215,7 @@ export default function AdminScreen() {
   useEffect(() => {
     if (activeTab === "leads" && adminLeads.length === 0) fetchAdminLeads(leadOrgFilter || undefined);
     if (activeTab === "performance" && teamStats.length === 0) fetchTeamStats(statsOrgFilter || undefined);
+    if (activeTab === "pos-sales" && !posSummary) fetchPosSales(posDays);
     if (activeTab === "organization") fetchOrgUnits();
   }, [activeTab]);
 
@@ -231,6 +254,7 @@ export default function AdminScreen() {
     setFormRole(isManager ? "rep" : "rep");
     setFormManagerId(isManager ? (currentUser?.id ?? null) : null);
     setFormOrgUnitId(null);
+    setFormShopifyStaffName("");
     setFormActive(true);
     setFormError("");
     setModalVisible(true);
@@ -245,6 +269,7 @@ export default function AdminScreen() {
     setFormRole(user.role as Role);
     setFormManagerId(user.managerId);
     setFormOrgUnitId((user as any).orgUnitId || null);
+    setFormShopifyStaffName((user as any).shopifyStaffName || "");
     setFormActive(user.isActive === "true");
     setFormError("");
     setModalVisible(true);
@@ -268,6 +293,7 @@ export default function AdminScreen() {
           isActive: formActive,
           managerId: formRole === "rep" ? formManagerId : null,
           orgUnitId: formOrgUnitId,
+          shopifyStaffName: formShopifyStaffName.trim() || null,
         };
         const res = await apiRequest("PUT", `/api/users/${editingUser.id}`, body);
         const updated = await res.json();
@@ -280,6 +306,7 @@ export default function AdminScreen() {
           phone: formPhone.trim(),
           role: formRole,
           orgUnitId: formOrgUnitId,
+          shopifyStaffName: formShopifyStaffName.trim() || null,
         };
         if (formRole === "rep" && formManagerId) {
           body.managerId = formManagerId;
@@ -535,6 +562,7 @@ export default function AdminScreen() {
     { key: "team", label: "Team", icon: "people" },
     { key: "leads", label: "Leads", icon: "document-text" },
     { key: "performance", label: "Stats", icon: "bar-chart" },
+    ...((isOwner || isManager) ? [{ key: "pos-sales" as AdminTab, label: "POS", icon: "card" }] : []),
     ...(isOwner ? [{ key: "organization" as AdminTab, label: "Org", icon: "git-network" }] : []),
   ];
 
@@ -545,6 +573,7 @@ export default function AdminScreen() {
     const roleConf = ROLE_CONFIG[item.role as Role] || ROLE_CONFIG.rep;
     const mgrName = getManagerName(item.managerId);
     const orgName = getOrgUnitName((item as any).orgUnitId);
+    const shopifyStaff = (item as any).shopifyStaffName;
     const lastLogin = formatLastLogin(item.lastLoginAt);
 
     return (
@@ -562,9 +591,16 @@ export default function AdminScreen() {
               {mgrName ? ` \u00B7 ${mgrName}'s team` : ""}
               {orgName ? ` \u00B7 ${orgName}` : ""}
             </Text>
-            <Text style={[styles.userLastLogin, { color: theme.textSecondary }]} numberOfLines={1}>
-              Last login: {lastLogin}
-            </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 }}>
+              <Text style={[styles.userLastLogin, { color: theme.textSecondary }]} numberOfLines={1}>
+                Last login: {lastLogin}
+              </Text>
+              {shopifyStaff && (
+                <View style={{ backgroundColor: "#D1FAE5", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+                  <Text style={{ fontSize: 9, color: "#059669", fontFamily: "Inter_600SemiBold" }}>POS: {shopifyStaff}</Text>
+                </View>
+              )}
+            </View>
           </View>
           <View style={styles.userActions}>
             <View style={[styles.roleBadge, { backgroundColor: roleConf.color + "18" }]}>
@@ -1071,6 +1107,157 @@ export default function AdminScreen() {
     </View>
   );
 
+  const formatCurrency = (val: any) => {
+    if (val == null || val === "") return "$0";
+    const num = parseFloat(val);
+    if (isNaN(num)) return "$0";
+    return "$" + num.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
+  const renderPosSalesTab = () => {
+    const staffUserMap = new Map<string, User>();
+    users.forEach((u) => {
+      if ((u as any).shopifyStaffName) {
+        staffUserMap.set((u as any).shopifyStaffName.toLowerCase(), u);
+      }
+    });
+
+    const rows = posSummary?.rows || [];
+    const totalsRow = rows.find((r: any) => !r.staff_member_name);
+    const staffRows = rows.filter((r: any) => r.staff_member_name);
+
+    return (
+      <View style={{ flex: 1 }}>
+        {/* Period selector */}
+        <View style={[styles.periodRow, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
+          {([1, 7, 30, 90] as const).map((d) => (
+            <Pressable
+              key={d}
+              onPress={() => { setPosDays(d); fetchPosSales(d); }}
+              style={[
+                styles.periodBtn,
+                { backgroundColor: posDays === d ? "#10B981" : "transparent" },
+              ]}
+            >
+              <Text style={{ color: posDays === d ? "#FFF" : theme.textSecondary, fontFamily: "Inter_600SemiBold", fontSize: 13 }}>
+                {d === 1 ? "Today" : `${d} Days`}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
+        {posLoading ? (
+          <View style={styles.center}>
+            <ActivityIndicator size="large" color="#10B981" />
+          </View>
+        ) : !posSummary ? (
+          <View style={styles.center}>
+            <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
+              Failed to load POS data. Check Shopify Admin API credentials.
+            </Text>
+          </View>
+        ) : (
+          <ScrollView contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + 20 }]}>
+            {/* Team totals */}
+            {totalsRow && (
+              <View style={[styles.teamTotalsCard, { backgroundColor: theme.surface }]}>
+                <Text style={[styles.teamTotalsTitle, { color: theme.text }]}>
+                  POS Team Totals ({posDays === 1 ? "Today" : `${posDays} Days`})
+                </Text>
+                <View style={styles.teamTotalsGrid}>
+                  <View style={styles.teamTotalItem}>
+                    <Text style={[styles.teamTotalValue, { color: "#3B82F6" }]}>{totalsRow.orders || 0}</Text>
+                    <Text style={[styles.teamTotalLabel, { color: theme.textSecondary }]}>Orders</Text>
+                  </View>
+                  <View style={styles.teamTotalItem}>
+                    <Text style={[styles.teamTotalValue, { color: "#10B981" }]}>{formatCurrency(totalsRow.total_sales)}</Text>
+                    <Text style={[styles.teamTotalLabel, { color: theme.textSecondary }]}>Total</Text>
+                  </View>
+                  <View style={styles.teamTotalItem}>
+                    <Text style={[styles.teamTotalValue, { color: "#8B5CF6" }]}>{formatCurrency(totalsRow.net_sales)}</Text>
+                    <Text style={[styles.teamTotalLabel, { color: theme.textSecondary }]}>Net</Text>
+                  </View>
+                  <View style={styles.teamTotalItem}>
+                    <Text style={[styles.teamTotalValue, { color: "#F59E0B" }]}>{formatCurrency(totalsRow.average_order_value)}</Text>
+                    <Text style={[styles.teamTotalLabel, { color: theme.textSecondary }]}>Avg Order</Text>
+                  </View>
+                </View>
+              </View>
+            )}
+
+            {/* Per-staff cards */}
+            {staffRows.length === 0 ? (
+              <View style={styles.center}>
+                <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No POS staff sales for this period</Text>
+              </View>
+            ) : (
+              staffRows.map((row: any, idx: number) => {
+                const name = row.staff_member_name || "Unknown";
+                const linkedUser = staffUserMap.get(name.toLowerCase());
+                const initials = name.split(" ").map((w: string) => w[0]).join("").toUpperCase().slice(0, 2);
+
+                return (
+                  <View key={idx} style={[styles.statsCard, { backgroundColor: theme.surface }]}>
+                    <View style={styles.statsCardHeader}>
+                      <View style={[styles.miniAvatar, { backgroundColor: linkedUser ? "#10B98120" : "#94A3B820" }]}>
+                        <Text style={{ fontSize: 12, fontFamily: "Inter_700Bold", color: linkedUser ? "#10B981" : "#94A3B8" }}>
+                          {initials}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                          <Text style={[styles.statsRepName, { color: theme.text }]} numberOfLines={1}>
+                            {name}
+                          </Text>
+                          {linkedUser && (
+                            <View style={{ backgroundColor: "#D1FAE5", paddingHorizontal: 6, paddingVertical: 1, borderRadius: 6 }}>
+                              <Text style={{ fontSize: 9, color: "#059669", fontFamily: "Inter_600SemiBold" }}>Linked</Text>
+                            </View>
+                          )}
+                        </View>
+                        {linkedUser && (
+                          <Text style={[styles.statsRepMeta, { color: theme.textSecondary }]}>
+                            {linkedUser.email}
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                    <View style={styles.statsGrid}>
+                      <View style={styles.statBox}>
+                        <Text style={[styles.statBoxValue, { color: "#3B82F6" }]}>{row.orders || 0}</Text>
+                        <Text style={[styles.statBoxLabel, { color: theme.textSecondary }]}>Orders</Text>
+                      </View>
+                      <View style={styles.statBox}>
+                        <Text style={[styles.statBoxValue, { color: "#10B981" }]}>{formatCurrency(row.total_sales)}</Text>
+                        <Text style={[styles.statBoxLabel, { color: theme.textSecondary }]}>Total</Text>
+                      </View>
+                      <View style={styles.statBox}>
+                        <Text style={[styles.statBoxValue, { color: "#8B5CF6" }]}>{formatCurrency(row.net_sales)}</Text>
+                        <Text style={[styles.statBoxLabel, { color: theme.textSecondary }]}>Net</Text>
+                      </View>
+                      <View style={styles.statBox}>
+                        <Text style={[styles.statBoxValue, { color: "#F59E0B" }]}>{formatCurrency(row.average_order_value)}</Text>
+                        <Text style={[styles.statBoxLabel, { color: theme.textSecondary }]}>Avg</Text>
+                      </View>
+                      <View style={styles.statBox}>
+                        <Text style={[styles.statBoxValue, { color: "#EF4444" }]}>{formatCurrency(row.discounts)}</Text>
+                        <Text style={[styles.statBoxLabel, { color: theme.textSecondary }]}>Discounts</Text>
+                      </View>
+                      <View style={styles.statBox}>
+                        <Text style={[styles.statBoxValue, { color: "#64748B" }]}>{formatCurrency(row.taxes)}</Text>
+                        <Text style={[styles.statBoxLabel, { color: theme.textSecondary }]}>Taxes</Text>
+                      </View>
+                    </View>
+                  </View>
+                );
+              })
+            )}
+          </ScrollView>
+        )}
+      </View>
+    );
+  };
+
   const renderOrganizationTab = () => {
     const getParentName = (parentId: string | null) => {
       if (!parentId) return null;
@@ -1215,6 +1402,11 @@ export default function AdminScreen() {
             <Ionicons name="refresh" size={22} color={theme.tint} />
           </Pressable>
         )}
+        {activeTab === "pos-sales" && (
+          <Pressable onPress={() => fetchPosSales(posDays)} style={styles.addBtn}>
+            <Ionicons name="refresh" size={22} color={theme.tint} />
+          </Pressable>
+        )}
         {activeTab === "organization" && (
           <Pressable onPress={openOrgCreateModal} style={styles.addBtn}>
             <Ionicons name="add-circle-outline" size={22} color={theme.tint} />
@@ -1250,6 +1442,7 @@ export default function AdminScreen() {
       {activeTab === "team" && renderTeamTab()}
       {activeTab === "leads" && renderLeadsTab()}
       {activeTab === "performance" && renderPerformanceTab()}
+      {activeTab === "pos-sales" && renderPosSalesTab()}
       {activeTab === "organization" && renderOrganizationTab()}
 
       {/* User form modal */}
@@ -1440,6 +1633,18 @@ export default function AdminScreen() {
                   </ScrollView>
                 </View>
               )}
+
+              <View style={styles.formGroup}>
+                <Text style={[styles.label, { color: theme.textSecondary }]}>Shopify POS Staff Name</Text>
+                <TextInput
+                  style={[styles.formInput, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
+                  value={formShopifyStaffName}
+                  onChangeText={setFormShopifyStaffName}
+                  placeholder="e.g. Walter, Colby (must match Shopify POS)"
+                  placeholderTextColor={theme.textSecondary}
+                  autoCapitalize="words"
+                />
+              </View>
 
               {editingUser && editingUser.id !== currentUser?.id && (
                 <View style={[styles.formGroup, styles.switchRow]}>

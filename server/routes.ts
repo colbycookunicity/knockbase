@@ -215,6 +215,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (req.body.username) updates.username = req.body.username;
       if (req.body.managerId !== undefined) updates.managerId = req.body.managerId;
       if (req.body.orgUnitId !== undefined) updates.orgUnitId = req.body.orgUnitId;
+      if (req.body.shopifyStaffName !== undefined) updates.shopifyStaffName = req.body.shopifyStaffName;
 
       const user = await storage.updateUser(targetId, updates);
       if (!user) {
@@ -426,6 +427,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err) {
       console.error("Delete org unit error:", err);
       res.status(500).json({ message: "Server error" });
+    }
+  });
+
+  // POS Sales analytics (admin view - all staff)
+  app.get("/api/admin/pos-sales", requireOwnerOrAdmin, async (req, res) => {
+    try {
+      const days = parseInt(req.query.days as string) || 7;
+      const data = await shopifyAdmin.getPosStaffSales(days);
+      res.json(data);
+    } catch (err: any) {
+      console.error("POS sales error:", err);
+      res.status(500).json({ message: err.message || "Failed to fetch POS sales data" });
+    }
+  });
+
+  // POS Sales summary (admin view - totals per staff)
+  app.get("/api/admin/pos-summary", requireOwnerOrAdmin, async (req, res) => {
+    try {
+      const days = parseInt(req.query.days as string) || 7;
+      const data = await shopifyAdmin.getPosStaffSummary(days);
+      res.json(data);
+    } catch (err: any) {
+      console.error("POS summary error:", err);
+      res.status(500).json({ message: err.message || "Failed to fetch POS summary" });
+    }
+  });
+
+  // POS Sales for current user (individual rep view)
+  app.get("/api/pos-sales/me", requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUserById(req.session.userId!);
+      if (!user) return res.status(401).json({ message: "User not found" });
+      if (!user.shopifyStaffName) {
+        return res.json({ columns: [], rows: [], staffName: null });
+      }
+      const days = parseInt(req.query.days as string) || 7;
+      const data = await shopifyAdmin.getPosStaffSales(days);
+      // Filter to just this user's staff name
+      const filtered = data.rows.filter((r: any) =>
+        r.staff_member_name && r.staff_member_name.toLowerCase() === user.shopifyStaffName!.toLowerCase()
+      );
+      res.json({ ...data, rows: filtered, staffName: user.shopifyStaffName });
+    } catch (err: any) {
+      console.error("POS sales/me error:", err);
+      res.status(500).json({ message: err.message || "Failed to fetch POS sales" });
     }
   });
 

@@ -15,6 +15,7 @@ export const users = pgTable("users", {
   email: text("email").notNull().unique(),
   phone: text("phone").notNull().default(""),
   orgUnitId: varchar("org_unit_id"),
+  shopifyStaffName: text("shopify_staff_name"),
   isActive: text("is_active").notNull().default("true"),
   lastLoginAt: timestamp("last_login_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -72,6 +73,7 @@ export const insertUserSchema = createInsertSchema(users).pick({
   role: true,
   managerId: true,
   orgUnitId: true,
+  shopifyStaffName: true,
   email: true,
   phone: true,
 });

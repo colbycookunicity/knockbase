@@ -212,7 +212,7 @@ export async function checkAccessScopes() {
   const domain = process.env.SHOPIFY_STORE_DOMAIN || "";
   const token = process.env.SHOPIFY_ADMIN_ACCESS_TOKEN || "";
   const tokenPrefix = token ? token.substring(0, 10) + "..." : "(empty)";
-  
+
   if (!domain || !token) {
     return { error: "Missing SHOPIFY_STORE_DOMAIN or SHOPIFY_ADMIN_ACCESS_TOKEN", tokenPrefix };
   }
@@ -251,6 +251,115 @@ export async function checkAccessScopes() {
   } catch (err: any) {
     return { error: err.message, tokenPrefix };
   }
+}
+
+// ========== SHOPIFYQL ANALYTICS ==========
+
+export async function runShopifyqlQuery(shopifyql: string): Promise<any> {
+  const query = `
+    query shopifyqlQuery($query: String!) {
+      shopifyqlQuery(query: $query) {
+        __typename
+        ... on TableResponse {
+          tableData {
+            unformattedData
+            rowData
+            columns {
+              name
+              dataType
+              displayName
+            }
+          }
+        }
+        parseErrors {
+          code
+          message
+        }
+      }
+    }
+  `;
+
+  const data = await adminQuery(query, { query: shopifyql });
+
+  if (data.shopifyqlQuery.parseErrors?.length > 0) {
+    throw new Error("ShopifyQL parse error: " + data.shopifyqlQuery.parseErrors[0].message);
+  }
+
+  if (data.shopifyqlQuery.__typename !== "TableResponse") {
+    throw new Error("Unexpected ShopifyQL response type: " + data.shopifyqlQuery.__typename);
+  }
+
+  return data.shopifyqlQuery.tableData;
+}
+
+// POS Staff Daily Sales - matches the Shopify admin analytics report
+export async function getPosStaffSales(sinceDays: number = 7): Promise<any> {
+  const shopifyql = `
+    FROM sales
+    SHOW orders,
+      average_order_value,
+      gross_sales,
+      discounts,
+      returns,
+      net_sales,
+      shipping_charges,
+      taxes,
+      total_sales
+    WHERE sales_channel = 'Point of Sale'
+      AND staff_member_name IS NOT NULL
+    GROUP BY staff_member_name, pos_location_name
+    TIMESERIES day
+    WITH TOTALS, GROUP_TOTALS
+    SINCE startOfDay(-${sinceDays}d) UNTIL today
+    ORDER BY day ASC, total_sales DESC
+    LIMIT 1000
+  `;
+
+  const tableData = await runShopifyqlQuery(shopifyql);
+  return parseShopifyqlTable(tableData);
+}
+
+// POS Staff Sales Summary (no daily timeseries, just totals per staff)
+export async function getPosStaffSummary(sinceDays: number = 7): Promise<any> {
+  const shopifyql = `
+    FROM sales
+    SHOW orders,
+      average_order_value,
+      gross_sales,
+      discounts,
+      returns,
+      net_sales,
+      taxes,
+      total_sales
+    WHERE sales_channel = 'Point of Sale'
+      AND staff_member_name IS NOT NULL
+    GROUP BY staff_member_name
+    WITH TOTALS
+    SINCE startOfDay(-${sinceDays}d) UNTIL today
+    ORDER BY total_sales DESC
+    LIMIT 100
+  `;
+
+  const tableData = await runShopifyqlQuery(shopifyql);
+  return parseShopifyqlTable(tableData);
+}
+
+function parseShopifyqlTable(tableData: any): { columns: any[]; rows: any[] } {
+  const { columns, rowData, unformattedData } = tableData;
+
+  // rowData contains formatted strings, unformattedData contains raw values
+  // Use unformattedData for numbers, rowData for display
+  const data = unformattedData || rowData || [];
+
+  const rows = data.map((row: any[]) => {
+    const obj: Record<string, any> = {};
+    columns.forEach((col: any, idx: number) => {
+      obj[col.name] = row[idx];
+    });
+    return obj;
+  });
+
+  return { columns, rows };
 }
 
 export async function getDraftOrder(id: string) {
