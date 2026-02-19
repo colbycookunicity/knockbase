@@ -14,31 +14,109 @@ import {
   Switch,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useTheme } from "@/lib/useTheme";
 import { useAuth, User } from "@/lib/auth-context";
 import { apiRequest } from "@/lib/query-client";
+import { LEAD_STATUS_CONFIG, LeadStatus } from "@/lib/types";
 
-type Role = "owner" | "admin" | "rep";
+type Role = "owner" | "manager" | "rep";
+type AdminTab = "team" | "leads" | "performance" | "organization";
 
 const ROLE_CONFIG: Record<Role, { label: string; icon: string; color: string }> = {
   owner: { label: "Owner", icon: "shield", color: "#8B5CF6" },
-  admin: { label: "Admin", icon: "briefcase", color: "#3B82F6" },
+  manager: { label: "Manager", icon: "briefcase", color: "#3B82F6" },
   rep: { label: "Rep", icon: "person", color: "#10B981" },
 };
+
+const ORG_UNIT_TYPES = [
+  { value: "region", label: "Region", icon: "globe-outline", color: "#8B5CF6" },
+  { value: "area", label: "Area", icon: "map-outline", color: "#3B82F6" },
+  { value: "team", label: "Team", icon: "people-outline", color: "#10B981" },
+];
+
+interface AdminLead {
+  id: string;
+  userId: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  email: string;
+  address: string;
+  status: LeadStatus;
+  notes: string;
+  knockedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  repName: string;
+  repEmail: string;
+}
+
+interface RepStats {
+  userId: string;
+  repName: string;
+  repEmail: string;
+  role: string;
+  isActive: string;
+  managerId: string | null;
+  totalLeads: number;
+  doorsKnocked: number;
+  contacts: number;
+  appointments: number;
+  sales: number;
+  contactRate: number;
+  closeRate: number;
+  todayDoors: number;
+  todaySales: number;
+  weekDoors: number;
+  weekSales: number;
+  lastActivity: string | null;
+}
+
+interface OrgUnit {
+  id: string;
+  name: string;
+  type: string;
+  parentId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export default function AdminScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user: currentUser, isOwner, isAdmin } = useAuth();
+  const { user: currentUser, isOwner, isManager } = useAuth();
 
+  const [activeTab, setActiveTab] = useState<AdminTab>("team");
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
 
+  // Admin leads state
+  const [adminLeads, setAdminLeads] = useState<AdminLead[]>([]);
+  const [leadsLoading, setLeadsLoading] = useState(false);
+  const [leadFilter, setLeadFilter] = useState<string>("all");
+  const [leadRepFilter, setLeadRepFilter] = useState<string>("all");
+  const [leadSearch, setLeadSearch] = useState("");
+
+  // Performance state
+  const [teamStats, setTeamStats] = useState<RepStats[]>([]);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [statsPeriod, setStatsPeriod] = useState<"today" | "week" | "all">("all");
+
+  // Organization state
+  const [orgUnits, setOrgUnits] = useState<OrgUnit[]>([]);
+  const [orgLoading, setOrgLoading] = useState(false);
+  const [orgModalVisible, setOrgModalVisible] = useState(false);
+  const [editingOrgUnit, setEditingOrgUnit] = useState<OrgUnit | null>(null);
+  const [orgFormName, setOrgFormName] = useState("");
+  const [orgFormType, setOrgFormType] = useState("team");
+  const [orgFormParentId, setOrgFormParentId] = useState<string | null>(null);
+
+  // User form state
   const [formUsername, setFormUsername] = useState("");
   const [formFullName, setFormFullName] = useState("");
   const [formEmail, setFormEmail] = useState("");
@@ -61,28 +139,74 @@ export default function AdminScreen() {
     }
   }, []);
 
+  const fetchAdminLeads = useCallback(async () => {
+    setLeadsLoading(true);
+    try {
+      const res = await apiRequest("GET", "/api/admin/leads");
+      const data = await res.json();
+      setAdminLeads(data);
+    } catch (err) {
+      console.error("Failed to fetch admin leads:", err);
+    } finally {
+      setLeadsLoading(false);
+    }
+  }, []);
+
+  const fetchTeamStats = useCallback(async () => {
+    setStatsLoading(true);
+    try {
+      const res = await apiRequest("GET", "/api/admin/team-stats");
+      const data = await res.json();
+      setTeamStats(data);
+    } catch (err) {
+      console.error("Failed to fetch team stats:", err);
+    } finally {
+      setStatsLoading(false);
+    }
+  }, []);
+
+  const fetchOrgUnits = useCallback(async () => {
+    setOrgLoading(true);
+    try {
+      const res = await apiRequest("GET", "/api/org-units");
+      const data = await res.json();
+      setOrgUnits(data);
+    } catch (err) {
+      console.error("Failed to fetch org units:", err);
+    } finally {
+      setOrgLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);
 
-  const admins = useMemo(() => {
-    return users.filter((u) => u.role === "admin");
+  useEffect(() => {
+    if (activeTab === "leads" && adminLeads.length === 0) fetchAdminLeads();
+    if (activeTab === "performance" && teamStats.length === 0) fetchTeamStats();
+    if (activeTab === "organization") fetchOrgUnits();
+  }, [activeTab]);
+
+  const managers = useMemo(() => {
+    return users.filter((u) => u.role === "manager");
   }, [users]);
 
-  const getAdminName = (managerId: string | null) => {
+  const getManagerName = (managerId: string | null) => {
     if (!managerId) return null;
     const mgr = users.find((u) => u.id === managerId);
     return mgr?.fullName || null;
   };
 
+  // ============ TEAM TAB ============
   const openCreateModal = () => {
     setEditingUser(null);
     setFormUsername("");
     setFormFullName("");
     setFormEmail("");
     setFormPhone("");
-    setFormRole(isAdmin ? "rep" : "rep");
-    setFormManagerId(isAdmin ? (currentUser?.id ?? null) : null);
+    setFormRole(isManager ? "rep" : "rep");
+    setFormManagerId(isManager ? (currentUser?.id ?? null) : null);
     setFormActive(true);
     setFormError("");
     setModalVisible(true);
@@ -94,7 +218,7 @@ export default function AdminScreen() {
     setFormFullName(user.fullName);
     setFormEmail(user.email);
     setFormPhone(user.phone);
-    setFormRole(user.role);
+    setFormRole(user.role as Role);
     setFormManagerId(user.managerId);
     setFormActive(user.isActive === "true");
     setFormError("");
@@ -188,35 +312,95 @@ export default function AdminScreen() {
     }
   };
 
+  // ============ ORG TAB ============
+  const openOrgCreateModal = () => {
+    setEditingOrgUnit(null);
+    setOrgFormName("");
+    setOrgFormType("team");
+    setOrgFormParentId(null);
+    setOrgModalVisible(true);
+  };
+
+  const openOrgEditModal = (unit: OrgUnit) => {
+    setEditingOrgUnit(unit);
+    setOrgFormName(unit.name);
+    setOrgFormType(unit.type);
+    setOrgFormParentId(unit.parentId);
+    setOrgModalVisible(true);
+  };
+
+  const handleOrgSave = async () => {
+    if (!orgFormName.trim()) return;
+    setSaving(true);
+    try {
+      if (editingOrgUnit) {
+        const res = await apiRequest("PUT", `/api/org-units/${editingOrgUnit.id}`, {
+          name: orgFormName.trim(),
+          type: orgFormType,
+          parentId: orgFormParentId,
+        });
+        const updated = await res.json();
+        setOrgUnits((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
+      } else {
+        const res = await apiRequest("POST", "/api/org-units", {
+          name: orgFormName.trim(),
+          type: orgFormType,
+          parentId: orgFormParentId,
+        });
+        const created = await res.json();
+        setOrgUnits((prev) => [...prev, created]);
+      }
+      setOrgModalVisible(false);
+    } catch (err) {
+      console.error("Save org unit error:", err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleOrgDelete = (unit: OrgUnit) => {
+    const doDelete = async () => {
+      try {
+        await apiRequest("DELETE", `/api/org-units/${unit.id}`);
+        setOrgUnits((prev) => prev.filter((u) => u.id !== unit.id));
+      } catch (err) {
+        console.error("Delete org unit error:", err);
+      }
+    };
+    if (Platform.OS === "web") {
+      if (window.confirm(`Delete "${unit.name}"?`)) doDelete();
+    } else {
+      Alert.alert("Delete", `Delete "${unit.name}"?`, [
+        { text: "Cancel", style: "cancel" },
+        { text: "Delete", style: "destructive", onPress: doDelete },
+      ]);
+    }
+  };
+
   const webTopInset = Platform.OS === "web" ? 67 : 0;
 
-  // Build team-grouped view for owners, flat list for admins
+  // ============ TEAM GROUPING ============
   const groupedUsers = useMemo(() => {
     if (!isOwner) {
-      // Admin sees their own team
       return [{ title: "Your Team", data: users.filter((u) => u.id !== currentUser?.id) }];
     }
-
-    // Owner sees the full team hierarchy
     const owners = users.filter((u) => u.role === "owner");
-    const adminsList = users.filter((u) => u.role === "admin");
+    const managersList = users.filter((u) => u.role === "manager");
     const reps = users.filter((u) => u.role === "rep");
 
     const sections: { title: string; data: User[] }[] = [];
     if (owners.length) sections.push({ title: "Owners", data: owners });
 
-    // Group reps under their admins for team view
-    for (const admin of adminsList) {
-      const teamReps = reps.filter((r) => r.managerId === admin.id);
+    for (const mgr of managersList) {
+      const teamReps = reps.filter((r) => r.managerId === mgr.id);
       sections.push({
-        title: `${admin.fullName}'s Team`,
-        data: [admin, ...teamReps],
+        title: `${mgr.fullName}'s Team`,
+        data: [mgr, ...teamReps],
       });
     }
 
-    // Unassigned reps (no admin)
     const unassigned = reps.filter(
-      (r) => !r.managerId || !adminsList.some((a) => a.id === r.managerId)
+      (r) => !r.managerId || !managersList.some((a) => a.id === r.managerId)
     );
     if (unassigned.length) {
       sections.push({ title: "Unassigned Reps", data: unassigned });
@@ -225,14 +409,75 @@ export default function AdminScreen() {
     return sections;
   }, [users, isOwner, currentUser]);
 
-  // Stats for the header
-  const stats = useMemo(() => {
+  const teamUserStats = useMemo(() => {
     const ownerCount = users.filter((u) => u.role === "owner").length;
-    const adminCount = users.filter((u) => u.role === "admin").length;
+    const managerCount = users.filter((u) => u.role === "manager").length;
     const repCount = users.filter((u) => u.role === "rep").length;
     const activeCount = users.filter((u) => u.isActive === "true").length;
-    return { ownerCount, adminCount, repCount, activeCount, total: users.length };
+    return { ownerCount, managerCount, repCount, activeCount, total: users.length };
   }, [users]);
+
+  // ============ LEADS FILTERING ============
+  const filteredLeads = useMemo(() => {
+    let filtered = adminLeads;
+    if (leadFilter !== "all") {
+      filtered = filtered.filter((l) => l.status === leadFilter);
+    }
+    if (leadRepFilter !== "all") {
+      filtered = filtered.filter((l) => l.userId === leadRepFilter);
+    }
+    if (leadSearch.trim()) {
+      const q = leadSearch.toLowerCase();
+      filtered = filtered.filter(
+        (l) =>
+          l.firstName.toLowerCase().includes(q) ||
+          l.lastName.toLowerCase().includes(q) ||
+          l.address.toLowerCase().includes(q) ||
+          l.repName.toLowerCase().includes(q)
+      );
+    }
+    return filtered.sort(
+      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    );
+  }, [adminLeads, leadFilter, leadRepFilter, leadSearch]);
+
+  const leadStatusSummary = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const lead of adminLeads) {
+      counts[lead.status] = (counts[lead.status] || 0) + 1;
+    }
+    return counts;
+  }, [adminLeads]);
+
+  // ============ PERFORMANCE SORTING ============
+  const sortedStats = useMemo(() => {
+    return [...teamStats].sort((a, b) => b.sales - a.sales);
+  }, [teamStats]);
+
+  const teamTotals = useMemo(() => {
+    return teamStats.reduce(
+      (acc, s) => ({
+        totalLeads: acc.totalLeads + s.totalLeads,
+        doorsKnocked: acc.doorsKnocked + s.doorsKnocked,
+        contacts: acc.contacts + s.contacts,
+        appointments: acc.appointments + s.appointments,
+        sales: acc.sales + s.sales,
+        todayDoors: acc.todayDoors + s.todayDoors,
+        todaySales: acc.todaySales + s.todaySales,
+        weekDoors: acc.weekDoors + s.weekDoors,
+        weekSales: acc.weekSales + s.weekSales,
+      }),
+      { totalLeads: 0, doorsKnocked: 0, contacts: 0, appointments: 0, sales: 0, todayDoors: 0, todaySales: 0, weekDoors: 0, weekSales: 0 }
+    );
+  }, [teamStats]);
+
+  // ============ ORG HIERARCHY ============
+  const orgTree = useMemo(() => {
+    const regions = orgUnits.filter((u) => u.type === "region");
+    const areas = orgUnits.filter((u) => u.type === "area");
+    const teams = orgUnits.filter((u) => u.type === "team");
+    return { regions, areas, teams };
+  }, [orgUnits]);
 
   const formatLastLogin = (lastLoginAt: string | null | undefined) => {
     if (!lastLoginAt) return "Never";
@@ -246,14 +491,32 @@ export default function AdminScreen() {
     if (diffMins < 60) return `${diffMins}m ago`;
     if (diffHours < 24) return `${diffHours}h ago`;
     if (diffDays < 7) return `${diffDays}d ago`;
-    return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: date.getFullYear() !== now.getFullYear() ? "numeric" : undefined });
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: date.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
+    });
   };
 
-  const renderUser = ({ item }: { item: User }) => {
+  const formatTimeAgo = (dateStr: string | null) => {
+    if (!dateStr) return "No activity";
+    return formatLastLogin(dateStr);
+  };
+
+  // ============ TAB CONFIG ============
+  const tabs: { key: AdminTab; label: string; icon: string }[] = [
+    { key: "team", label: "Team", icon: "people" },
+    { key: "leads", label: "Leads", icon: "document-text" },
+    { key: "performance", label: "Stats", icon: "bar-chart" },
+    ...(isOwner ? [{ key: "organization" as AdminTab, label: "Org", icon: "git-network" }] : []),
+  ];
+
+  // ============ RENDER FUNCTIONS ============
+  const renderUserCard = ({ item }: { item: User }) => {
     const isSelf = item.id === currentUser?.id;
     const isActive = item.isActive === "true";
-    const roleConf = ROLE_CONFIG[item.role] || ROLE_CONFIG.rep;
-    const adminName = getAdminName(item.managerId);
+    const roleConf = ROLE_CONFIG[item.role as Role] || ROLE_CONFIG.rep;
+    const mgrName = getManagerName(item.managerId);
     const lastLogin = formatLastLogin(item.lastLoginAt);
 
     return (
@@ -268,7 +531,7 @@ export default function AdminScreen() {
             </Text>
             <Text style={[styles.userMeta, { color: theme.textSecondary }]} numberOfLines={1}>
               {item.email}
-              {adminName ? ` \u00B7 ${adminName}'s team` : ""}
+              {mgrName ? ` \u00B7 ${mgrName}'s team` : ""}
             </Text>
             <Text style={[styles.userLastLogin, { color: theme.textSecondary }]} numberOfLines={1}>
               Last login: {lastLogin}
@@ -303,7 +566,104 @@ export default function AdminScreen() {
     );
   };
 
-  const allUsers = useMemo(() => {
+  const renderLeadCard = ({ item }: { item: AdminLead }) => {
+    const statusConf = LEAD_STATUS_CONFIG[item.status] || LEAD_STATUS_CONFIG.untouched;
+    return (
+      <Pressable
+        style={[styles.leadCard, { backgroundColor: theme.surface }]}
+        onPress={() => router.push({ pathname: "/lead-detail", params: { id: item.id } })}
+      >
+        <View style={styles.leadCardTop}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.leadName, { color: theme.text }]} numberOfLines={1}>
+              {[item.firstName, item.lastName].filter(Boolean).join(" ") || "No Name"}
+            </Text>
+            <Text style={[styles.leadAddress, { color: theme.textSecondary }]} numberOfLines={1}>
+              {item.address || "No address"}
+            </Text>
+          </View>
+          <View style={[styles.statusBadge, { backgroundColor: statusConf.color + "18" }]}>
+            <View style={[styles.statusDot, { backgroundColor: statusConf.color }]} />
+            <Text style={[styles.statusText, { color: statusConf.color }]}>{statusConf.label}</Text>
+          </View>
+        </View>
+        <View style={styles.leadCardBottom}>
+          <View style={styles.leadRepInfo}>
+            <Ionicons name="person-outline" size={13} color={theme.textSecondary} />
+            <Text style={[styles.leadRepName, { color: theme.textSecondary }]}>{item.repName}</Text>
+          </View>
+          <Text style={[styles.leadTime, { color: theme.textSecondary }]}>
+            {formatTimeAgo(item.updatedAt)}
+          </Text>
+        </View>
+      </Pressable>
+    );
+  };
+
+  const renderRepStatsCard = ({ item }: { item: RepStats }) => {
+    const roleConf = ROLE_CONFIG[item.role as Role] || ROLE_CONFIG.rep;
+    const displayDoors = statsPeriod === "today" ? item.todayDoors : statsPeriod === "week" ? item.weekDoors : item.doorsKnocked;
+    const displaySales = statsPeriod === "today" ? item.todaySales : statsPeriod === "week" ? item.weekSales : item.sales;
+    const displayContacts = statsPeriod === "all" ? item.contacts : 0;
+    const displayAppts = statsPeriod === "all" ? item.appointments : 0;
+
+    return (
+      <View style={[styles.statsCard, { backgroundColor: theme.surface }]}>
+        <View style={styles.statsCardHeader}>
+          <View style={[styles.miniAvatar, { backgroundColor: roleConf.color + "20" }]}>
+            <Ionicons name={roleConf.icon as any} size={14} color={roleConf.color} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.statsRepName, { color: theme.text }]} numberOfLines={1}>
+              {item.repName}
+            </Text>
+            <Text style={[styles.statsRepMeta, { color: theme.textSecondary }]}>
+              {item.totalLeads} leads {"\u00B7"} Last active: {formatTimeAgo(item.lastActivity)}
+            </Text>
+          </View>
+          <View style={[styles.roleBadge, { backgroundColor: roleConf.color + "18" }]}>
+            <Text style={[styles.roleBadgeText, { color: roleConf.color }]}>{roleConf.label}</Text>
+          </View>
+        </View>
+        <View style={styles.statsGrid}>
+          <View style={styles.statBox}>
+            <Text style={[styles.statBoxValue, { color: "#3B82F6" }]}>{displayDoors}</Text>
+            <Text style={[styles.statBoxLabel, { color: theme.textSecondary }]}>Doors</Text>
+          </View>
+          {statsPeriod === "all" && (
+            <View style={styles.statBox}>
+              <Text style={[styles.statBoxValue, { color: "#06B6D4" }]}>{displayContacts}</Text>
+              <Text style={[styles.statBoxLabel, { color: theme.textSecondary }]}>Contacts</Text>
+            </View>
+          )}
+          {statsPeriod === "all" && (
+            <View style={styles.statBox}>
+              <Text style={[styles.statBoxValue, { color: "#8B5CF6" }]}>{displayAppts}</Text>
+              <Text style={[styles.statBoxLabel, { color: theme.textSecondary }]}>Appts</Text>
+            </View>
+          )}
+          <View style={styles.statBox}>
+            <Text style={[styles.statBoxValue, { color: "#10B981" }]}>{displaySales}</Text>
+            <Text style={[styles.statBoxLabel, { color: theme.textSecondary }]}>Sales</Text>
+          </View>
+          {statsPeriod === "all" && (
+            <>
+              <View style={styles.statBox}>
+                <Text style={[styles.statBoxValue, { color: theme.text }]}>{item.contactRate}%</Text>
+                <Text style={[styles.statBoxLabel, { color: theme.textSecondary }]}>Contact</Text>
+              </View>
+              <View style={styles.statBox}>
+                <Text style={[styles.statBoxValue, { color: theme.text }]}>{item.closeRate}%</Text>
+                <Text style={[styles.statBoxLabel, { color: theme.textSecondary }]}>Close</Text>
+              </View>
+            </>
+          )}
+        </View>
+      </View>
+    );
+  };
+
+  const allTeamItems = useMemo(() => {
     const result: (User | { type: "header"; title: string })[] = [];
     for (const section of groupedUsers) {
       result.push({ type: "header", title: section.title } as any);
@@ -312,10 +672,350 @@ export default function AdminScreen() {
     return result;
   }, [groupedUsers]);
 
-  const availableRoles: Role[] = isOwner ? ["owner", "admin", "rep"] : ["rep"];
+  const availableRoles: Role[] = isOwner ? ["owner", "manager", "rep"] : ["rep"];
+
+  // Unique reps for the leads filter
+  const uniqueReps = useMemo(() => {
+    const repMap = new Map<string, string>();
+    adminLeads.forEach((l) => {
+      if (!repMap.has(l.userId)) repMap.set(l.userId, l.repName);
+    });
+    return Array.from(repMap.entries()).map(([id, name]) => ({ id, name }));
+  }, [adminLeads]);
+
+  // ============ RENDER TAB CONTENT ============
+  const renderTeamTab = () => (
+    <>
+      {!loading && (
+        <View style={[styles.statsBar, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
+          <View style={styles.statItem}>
+            <Text style={[styles.statValue, { color: ROLE_CONFIG.owner.color }]}>{teamUserStats.ownerCount}</Text>
+            <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Owners</Text>
+          </View>
+          <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
+          <View style={styles.statItem}>
+            <Text style={[styles.statValue, { color: ROLE_CONFIG.manager.color }]}>{teamUserStats.managerCount}</Text>
+            <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Managers</Text>
+          </View>
+          <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
+          <View style={styles.statItem}>
+            <Text style={[styles.statValue, { color: ROLE_CONFIG.rep.color }]}>{teamUserStats.repCount}</Text>
+            <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Reps</Text>
+          </View>
+          <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
+          <View style={styles.statItem}>
+            <Text style={[styles.statValue, { color: theme.text }]}>{teamUserStats.activeCount}</Text>
+            <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Active</Text>
+          </View>
+        </View>
+      )}
+      {loading ? (
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={theme.tint} />
+        </View>
+      ) : (
+        <FlatList
+          data={allTeamItems}
+          keyExtractor={(item: any) => item.type === "header" ? `header-${item.title}` : item.id}
+          renderItem={({ item }: any) => {
+            if (item.type === "header") {
+              return (
+                <Text style={[styles.sectionHeader, { color: theme.textSecondary }]}>
+                  {item.title}
+                </Text>
+              );
+            }
+            return renderUserCard({ item });
+          }}
+          contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + 20 }]}
+          ListEmptyComponent={
+            <View style={styles.center}>
+              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No team members yet</Text>
+            </View>
+          }
+        />
+      )}
+    </>
+  );
+
+  const renderLeadsTab = () => (
+    <View style={{ flex: 1 }}>
+      {/* Lead status summary bar */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={[styles.filterBar, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}
+        contentContainerStyle={{ paddingHorizontal: 12, gap: 6, alignItems: "center" }}
+      >
+        <Pressable
+          style={[
+            styles.filterChip,
+            {
+              backgroundColor: leadFilter === "all" ? theme.tint : theme.background,
+              borderColor: leadFilter === "all" ? theme.tint : theme.border,
+            },
+          ]}
+          onPress={() => setLeadFilter("all")}
+        >
+          <Text style={{ color: leadFilter === "all" ? "#FFF" : theme.text, fontFamily: "Inter_500Medium", fontSize: 12 }}>
+            All ({adminLeads.length})
+          </Text>
+        </Pressable>
+        {(Object.keys(LEAD_STATUS_CONFIG) as LeadStatus[]).map((status) => {
+          const config = LEAD_STATUS_CONFIG[status];
+          const count = leadStatusSummary[status] || 0;
+          if (count === 0) return null;
+          const selected = leadFilter === status;
+          return (
+            <Pressable
+              key={status}
+              style={[
+                styles.filterChip,
+                {
+                  backgroundColor: selected ? config.color : theme.background,
+                  borderColor: selected ? config.color : theme.border,
+                },
+              ]}
+              onPress={() => setLeadFilter(selected ? "all" : status)}
+            >
+              <Text style={{ color: selected ? "#FFF" : theme.text, fontFamily: "Inter_500Medium", fontSize: 12 }}>
+                {config.label} ({count})
+              </Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+
+      {/* Rep filter + search */}
+      <View style={[styles.searchRow, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
+        <View style={[styles.searchInput, { backgroundColor: theme.background, borderColor: theme.border }]}>
+          <Ionicons name="search" size={16} color={theme.textSecondary} />
+          <TextInput
+            style={[styles.searchText, { color: theme.text }]}
+            value={leadSearch}
+            onChangeText={setLeadSearch}
+            placeholder="Search leads..."
+            placeholderTextColor={theme.textSecondary}
+          />
+        </View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexShrink: 1 }}>
+          <Pressable
+            style={[
+              styles.repFilterChip,
+              {
+                backgroundColor: leadRepFilter === "all" ? theme.tint + "18" : theme.background,
+                borderColor: leadRepFilter === "all" ? theme.tint : theme.border,
+              },
+            ]}
+            onPress={() => setLeadRepFilter("all")}
+          >
+            <Text style={{ color: leadRepFilter === "all" ? theme.tint : theme.textSecondary, fontFamily: "Inter_500Medium", fontSize: 11 }}>
+              All Reps
+            </Text>
+          </Pressable>
+          {uniqueReps.map((rep) => {
+            const selected = leadRepFilter === rep.id;
+            return (
+              <Pressable
+                key={rep.id}
+                style={[
+                  styles.repFilterChip,
+                  {
+                    backgroundColor: selected ? theme.tint + "18" : theme.background,
+                    borderColor: selected ? theme.tint : theme.border,
+                  },
+                ]}
+                onPress={() => setLeadRepFilter(selected ? "all" : rep.id)}
+              >
+                <Text style={{ color: selected ? theme.tint : theme.textSecondary, fontFamily: "Inter_500Medium", fontSize: 11 }}>
+                  {rep.name}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </View>
+
+      {leadsLoading ? (
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={theme.tint} />
+        </View>
+      ) : (
+        <FlatList
+          data={filteredLeads}
+          keyExtractor={(item) => item.id}
+          renderItem={renderLeadCard}
+          contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + 20 }]}
+          ListEmptyComponent={
+            <View style={styles.center}>
+              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No leads found</Text>
+            </View>
+          }
+          ListHeaderComponent={
+            <Text style={[styles.resultCount, { color: theme.textSecondary }]}>
+              {filteredLeads.length} lead{filteredLeads.length !== 1 ? "s" : ""}
+            </Text>
+          }
+        />
+      )}
+    </View>
+  );
+
+  const renderPerformanceTab = () => (
+    <View style={{ flex: 1 }}>
+      {/* Period selector */}
+      <View style={[styles.periodRow, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
+        {(["today", "week", "all"] as const).map((p) => (
+          <Pressable
+            key={p}
+            onPress={() => setStatsPeriod(p)}
+            style={[
+              styles.periodBtn,
+              { backgroundColor: statsPeriod === p ? theme.tint : "transparent" },
+            ]}
+          >
+            <Text style={{ color: statsPeriod === p ? "#FFF" : theme.textSecondary, fontFamily: "Inter_600SemiBold", fontSize: 13 }}>
+              {p === "today" ? "Today" : p === "week" ? "This Week" : "All Time"}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+
+      {statsLoading ? (
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={theme.tint} />
+        </View>
+      ) : (
+        <FlatList
+          data={sortedStats}
+          keyExtractor={(item) => item.userId}
+          renderItem={renderRepStatsCard}
+          contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + 20 }]}
+          ListHeaderComponent={
+            <View style={[styles.teamTotalsCard, { backgroundColor: theme.surface }]}>
+              <Text style={[styles.teamTotalsTitle, { color: theme.text }]}>Team Totals</Text>
+              <View style={styles.teamTotalsGrid}>
+                <View style={styles.teamTotalItem}>
+                  <Text style={[styles.teamTotalValue, { color: "#3B82F6" }]}>
+                    {statsPeriod === "today" ? teamTotals.todayDoors : statsPeriod === "week" ? teamTotals.weekDoors : teamTotals.doorsKnocked}
+                  </Text>
+                  <Text style={[styles.teamTotalLabel, { color: theme.textSecondary }]}>Doors</Text>
+                </View>
+                {statsPeriod === "all" && (
+                  <View style={styles.teamTotalItem}>
+                    <Text style={[styles.teamTotalValue, { color: "#06B6D4" }]}>{teamTotals.contacts}</Text>
+                    <Text style={[styles.teamTotalLabel, { color: theme.textSecondary }]}>Contacts</Text>
+                  </View>
+                )}
+                {statsPeriod === "all" && (
+                  <View style={styles.teamTotalItem}>
+                    <Text style={[styles.teamTotalValue, { color: "#8B5CF6" }]}>{teamTotals.appointments}</Text>
+                    <Text style={[styles.teamTotalLabel, { color: theme.textSecondary }]}>Appts</Text>
+                  </View>
+                )}
+                <View style={styles.teamTotalItem}>
+                  <Text style={[styles.teamTotalValue, { color: "#10B981" }]}>
+                    {statsPeriod === "today" ? teamTotals.todaySales : statsPeriod === "week" ? teamTotals.weekSales : teamTotals.sales}
+                  </Text>
+                  <Text style={[styles.teamTotalLabel, { color: theme.textSecondary }]}>Sales</Text>
+                </View>
+                <View style={styles.teamTotalItem}>
+                  <Text style={[styles.teamTotalValue, { color: theme.text }]}>{teamTotals.totalLeads}</Text>
+                  <Text style={[styles.teamTotalLabel, { color: theme.textSecondary }]}>Total Leads</Text>
+                </View>
+              </View>
+            </View>
+          }
+          ListEmptyComponent={
+            <View style={styles.center}>
+              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No team performance data</Text>
+            </View>
+          }
+        />
+      )}
+    </View>
+  );
+
+  const renderOrganizationTab = () => {
+    const getParentName = (parentId: string | null) => {
+      if (!parentId) return null;
+      const parent = orgUnits.find((u) => u.id === parentId);
+      return parent?.name || null;
+    };
+
+    const getChildCount = (unitId: string) => {
+      return orgUnits.filter((u) => u.parentId === unitId).length;
+    };
+
+    const getUserCount = (unitId: string) => {
+      return users.filter((u) => (u as any).orgUnitId === unitId).length;
+    };
+
+    return (
+      <View style={{ flex: 1 }}>
+        {orgLoading ? (
+          <View style={styles.center}>
+            <ActivityIndicator size="large" color={theme.tint} />
+          </View>
+        ) : (
+          <ScrollView contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + 20 }]}>
+            <Text style={[styles.orgDescription, { color: theme.textSecondary }]}>
+              Organize your team using a SalesRabbit-style hierarchy: Regions (by state), Areas (by city/county), and Teams (sub-groups).
+            </Text>
+
+            {ORG_UNIT_TYPES.map(({ value: type, label, icon, color }) => {
+              const items = orgUnits.filter((u) => u.type === type);
+              return (
+                <View key={type} style={{ marginBottom: 16 }}>
+                  <View style={styles.orgSectionHeader}>
+                    <Ionicons name={icon as any} size={18} color={color} />
+                    <Text style={[styles.orgSectionTitle, { color: theme.text }]}>
+                      {label}s ({items.length})
+                    </Text>
+                  </View>
+                  {items.length === 0 ? (
+                    <Text style={[styles.orgEmpty, { color: theme.textSecondary }]}>
+                      No {label.toLowerCase()}s yet
+                    </Text>
+                  ) : (
+                    items.map((unit) => (
+                      <View key={unit.id} style={[styles.orgCard, { backgroundColor: theme.surface }]}>
+                        <Pressable style={styles.orgCardContent} onPress={() => openOrgEditModal(unit)}>
+                          <View style={[styles.orgDot, { backgroundColor: color }]} />
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.orgName, { color: theme.text }]}>{unit.name}</Text>
+                            {getParentName(unit.parentId) && (
+                              <Text style={[styles.orgParent, { color: theme.textSecondary }]}>
+                                Parent: {getParentName(unit.parentId)}
+                              </Text>
+                            )}
+                          </View>
+                          <View style={styles.orgMeta}>
+                            {getChildCount(unit.id) > 0 && (
+                              <Text style={[styles.orgMetaText, { color: theme.textSecondary }]}>
+                                {getChildCount(unit.id)} sub-units
+                              </Text>
+                            )}
+                          </View>
+                          <Pressable onPress={() => handleOrgDelete(unit)} style={styles.actionBtn}>
+                            <Ionicons name="trash-outline" size={18} color={theme.danger} />
+                          </Pressable>
+                        </Pressable>
+                      </View>
+                    ))
+                  )}
+                </View>
+              );
+            })}
+          </ScrollView>
+        )}
+      </View>
+    );
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
+      {/* Header */}
       <View
         style={[
           styles.header,
@@ -329,69 +1029,60 @@ export default function AdminScreen() {
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={24} color={theme.tint} />
         </Pressable>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>Team Management</Text>
-        <Pressable onPress={openCreateModal} style={styles.addBtn}>
-          <Ionicons name="person-add" size={22} color={theme.tint} />
-        </Pressable>
+        <Text style={[styles.headerTitle, { color: theme.text }]}>Admin Panel</Text>
+        {activeTab === "team" && (
+          <Pressable onPress={openCreateModal} style={styles.addBtn}>
+            <Ionicons name="person-add" size={22} color={theme.tint} />
+          </Pressable>
+        )}
+        {activeTab === "leads" && (
+          <Pressable onPress={fetchAdminLeads} style={styles.addBtn}>
+            <Ionicons name="refresh" size={22} color={theme.tint} />
+          </Pressable>
+        )}
+        {activeTab === "performance" && (
+          <Pressable onPress={fetchTeamStats} style={styles.addBtn}>
+            <Ionicons name="refresh" size={22} color={theme.tint} />
+          </Pressable>
+        )}
+        {activeTab === "organization" && (
+          <Pressable onPress={openOrgCreateModal} style={styles.addBtn}>
+            <Ionicons name="add-circle-outline" size={22} color={theme.tint} />
+          </Pressable>
+        )}
       </View>
 
-      {/* Stats bar */}
-      {!loading && (
-        <View style={[styles.statsBar, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
-          <View style={styles.statItem}>
-            <Text style={[styles.statValue, { color: ROLE_CONFIG.owner.color }]}>{stats.ownerCount}</Text>
-            <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Owners</Text>
-          </View>
-          <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
-          <View style={styles.statItem}>
-            <Text style={[styles.statValue, { color: ROLE_CONFIG.admin.color }]}>{stats.adminCount}</Text>
-            <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Admins</Text>
-          </View>
-          <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
-          <View style={styles.statItem}>
-            <Text style={[styles.statValue, { color: ROLE_CONFIG.rep.color }]}>{stats.repCount}</Text>
-            <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Reps</Text>
-          </View>
-          <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
-          <View style={styles.statItem}>
-            <Text style={[styles.statValue, { color: theme.text }]}>{stats.activeCount}</Text>
-            <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Active</Text>
-          </View>
-        </View>
-      )}
+      {/* Tab bar */}
+      <View style={[styles.tabBar, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
+        {tabs.map((tab) => {
+          const active = activeTab === tab.key;
+          return (
+            <Pressable
+              key={tab.key}
+              style={[styles.tab, active && { borderBottomColor: theme.tint, borderBottomWidth: 2 }]}
+              onPress={() => setActiveTab(tab.key)}
+            >
+              <Ionicons name={tab.icon as any} size={18} color={active ? theme.tint : theme.textSecondary} />
+              <Text
+                style={[
+                  styles.tabLabel,
+                  { color: active ? theme.tint : theme.textSecondary },
+                ]}
+              >
+                {tab.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
 
-      {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={theme.tint} />
-        </View>
-      ) : (
-        <FlatList
-          data={allUsers}
-          keyExtractor={(item: any) => item.type === "header" ? `header-${item.title}` : item.id}
-          renderItem={({ item }: any) => {
-            if (item.type === "header") {
-              return (
-                <Text style={[styles.sectionHeader, { color: theme.textSecondary }]}>
-                  {item.title}
-                </Text>
-              );
-            }
-            return renderUser({ item });
-          }}
-          contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 0) + 20 }]}
-          ListEmptyComponent={
-            <View style={styles.center}>
-              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No team members yet</Text>
-            </View>
-          }
-          ListFooterComponent={
-            <Text style={[styles.footerText, { color: theme.textSecondary }]}>
-              Powered by Unicity International{"\n"}{"\u00A9"} 2026 Unicity. All rights reserved.
-            </Text>
-          }
-        />
-      )}
+      {/* Tab content */}
+      {activeTab === "team" && renderTeamTab()}
+      {activeTab === "leads" && renderLeadsTab()}
+      {activeTab === "performance" && renderPerformanceTab()}
+      {activeTab === "organization" && renderOrganizationTab()}
 
+      {/* User form modal */}
       <Modal visible={modalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
@@ -489,9 +1180,9 @@ export default function AdminScreen() {
                 </View>
               </View>
 
-              {isOwner && formRole === "rep" && admins.length > 0 && (
+              {isOwner && formRole === "rep" && managers.length > 0 && (
                 <View style={styles.formGroup}>
-                  <Text style={[styles.label, { color: theme.textSecondary }]}>Assign to Admin</Text>
+                  <Text style={[styles.label, { color: theme.textSecondary }]}>Assign to Manager</Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.adminScroll}>
                     <Pressable
                       style={[
@@ -507,11 +1198,11 @@ export default function AdminScreen() {
                         Unassigned
                       </Text>
                     </Pressable>
-                    {admins.map((adm) => {
-                      const selected = formManagerId === adm.id;
+                    {managers.map((mgr) => {
+                      const selected = formManagerId === mgr.id;
                       return (
                         <Pressable
-                          key={adm.id}
+                          key={mgr.id}
                           style={[
                             styles.adminChip,
                             {
@@ -519,10 +1210,10 @@ export default function AdminScreen() {
                               borderColor: selected ? theme.accent : theme.border,
                             },
                           ]}
-                          onPress={() => setFormManagerId(adm.id)}
+                          onPress={() => setFormManagerId(mgr.id)}
                         >
                           <Text style={{ color: selected ? "#FFF" : theme.text, fontFamily: "Inter_500Medium", fontSize: 13 }}>
-                            {adm.fullName}
+                            {mgr.fullName}
                           </Text>
                         </Pressable>
                       );
@@ -560,6 +1251,127 @@ export default function AdminScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Org unit form modal */}
+      <Modal visible={orgModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={styles.modalHeader}>
+                <Text style={[styles.modalTitle, { color: theme.text }]}>
+                  {editingOrgUnit ? "Edit Unit" : "Add Org Unit"}
+                </Text>
+                <Pressable onPress={() => setOrgModalVisible(false)}>
+                  <Ionicons name="close" size={24} color={theme.textSecondary} />
+                </Pressable>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={[styles.label, { color: theme.textSecondary }]}>Name</Text>
+                <TextInput
+                  style={[styles.formInput, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
+                  value={orgFormName}
+                  onChangeText={setOrgFormName}
+                  placeholder="e.g. Mississippi, Jackson Metro, Team Alpha"
+                  placeholderTextColor={theme.textSecondary}
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={[styles.label, { color: theme.textSecondary }]}>Type</Text>
+                <View style={styles.roleRow}>
+                  {ORG_UNIT_TYPES.map((t) => {
+                    const isSelected = orgFormType === t.value;
+                    return (
+                      <Pressable
+                        key={t.value}
+                        style={[
+                          styles.roleBtn,
+                          {
+                            backgroundColor: isSelected ? t.color : theme.background,
+                            borderColor: isSelected ? t.color : theme.border,
+                          },
+                        ]}
+                        onPress={() => setOrgFormType(t.value)}
+                      >
+                        <Ionicons
+                          name={t.icon as any}
+                          size={14}
+                          color={isSelected ? "#FFF" : theme.textSecondary}
+                          style={{ marginRight: 4 }}
+                        />
+                        <Text style={{ color: isSelected ? "#FFF" : theme.text, fontFamily: "Inter_500Medium", fontSize: 13 }}>
+                          {t.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {orgFormType !== "region" && orgUnits.length > 0 && (
+                <View style={styles.formGroup}>
+                  <Text style={[styles.label, { color: theme.textSecondary }]}>Parent Unit</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.adminScroll}>
+                    <Pressable
+                      style={[
+                        styles.adminChip,
+                        {
+                          backgroundColor: !orgFormParentId ? theme.accent : theme.background,
+                          borderColor: !orgFormParentId ? theme.accent : theme.border,
+                        },
+                      ]}
+                      onPress={() => setOrgFormParentId(null)}
+                    >
+                      <Text style={{ color: !orgFormParentId ? "#FFF" : theme.text, fontFamily: "Inter_500Medium", fontSize: 13 }}>
+                        None
+                      </Text>
+                    </Pressable>
+                    {orgUnits
+                      .filter((u) => {
+                        if (orgFormType === "area") return u.type === "region";
+                        if (orgFormType === "team") return u.type === "area" || u.type === "region";
+                        return false;
+                      })
+                      .map((unit) => {
+                        const selected = orgFormParentId === unit.id;
+                        return (
+                          <Pressable
+                            key={unit.id}
+                            style={[
+                              styles.adminChip,
+                              {
+                                backgroundColor: selected ? theme.accent : theme.background,
+                                borderColor: selected ? theme.accent : theme.border,
+                              },
+                            ]}
+                            onPress={() => setOrgFormParentId(unit.id)}
+                          >
+                            <Text style={{ color: selected ? "#FFF" : theme.text, fontFamily: "Inter_500Medium", fontSize: 13 }}>
+                              {unit.name} ({unit.type})
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                  </ScrollView>
+                </View>
+              )}
+
+              <Pressable
+                style={[styles.saveBtn, { backgroundColor: theme.tint, opacity: saving ? 0.7 : 1 }]}
+                onPress={handleOrgSave}
+                disabled={saving}
+              >
+                {saving ? (
+                  <ActivityIndicator color="#FFF" size="small" />
+                ) : (
+                  <Text style={styles.saveBtnText}>{editingOrgUnit ? "Save Changes" : "Add Unit"}</Text>
+                )}
+              </Pressable>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -576,6 +1388,23 @@ const styles = StyleSheet.create({
   backBtn: { padding: 4, marginRight: 8 },
   headerTitle: { flex: 1, fontSize: 20, fontFamily: "Inter_700Bold" },
   addBtn: { padding: 4 },
+  tabBar: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    paddingHorizontal: 4,
+  },
+  tab: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+    gap: 4,
+  },
+  tabLabel: {
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+  },
   statsBar: {
     flexDirection: "row",
     alignItems: "center",
@@ -586,7 +1415,13 @@ const styles = StyleSheet.create({
   },
   statItem: { alignItems: "center", flex: 1 },
   statValue: { fontSize: 20, fontFamily: "Inter_700Bold" },
-  statLabel: { fontSize: 11, fontFamily: "Inter_500Medium", marginTop: 2, textTransform: "uppercase" as const, letterSpacing: 0.5 },
+  statLabel: {
+    fontSize: 11,
+    fontFamily: "Inter_500Medium",
+    marginTop: 2,
+    textTransform: "uppercase" as const,
+    letterSpacing: 0.5,
+  },
   statDivider: { width: 1, height: 28, marginHorizontal: 4 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 60 },
   list: { padding: 16, gap: 8 },
@@ -613,6 +1448,197 @@ const styles = StyleSheet.create({
   selfBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   selfBadgeText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
   emptyText: { fontSize: 15, fontFamily: "Inter_400Regular" },
+
+  // Leads tab
+  filterBar: {
+    borderBottomWidth: 1,
+    paddingVertical: 8,
+    maxHeight: 50,
+  },
+  filterChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  searchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    gap: 8,
+  },
+  searchInput: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    height: 36,
+    gap: 6,
+    minWidth: 140,
+  },
+  searchText: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+  },
+  repFilterChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginRight: 6,
+  },
+  resultCount: {
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
+    marginBottom: 4,
+    paddingHorizontal: 4,
+  },
+  leadCard: {
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 2,
+  },
+  leadCardTop: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  leadName: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  leadAddress: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
+  statusBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    gap: 4,
+  },
+  statusDot: { width: 6, height: 6, borderRadius: 3 },
+  statusText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  leadCardBottom: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 8,
+  },
+  leadRepInfo: { flexDirection: "row", alignItems: "center", gap: 4 },
+  leadRepName: { fontSize: 12, fontFamily: "Inter_500Medium" },
+  leadTime: { fontSize: 11, fontFamily: "Inter_400Regular" },
+
+  // Performance tab
+  periodRow: {
+    flexDirection: "row",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    gap: 4,
+    borderBottomWidth: 1,
+  },
+  periodBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  statsCard: {
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 2,
+  },
+  statsCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 10,
+  },
+  miniAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  statsRepName: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  statsRepMeta: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 1 },
+  statsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 2,
+  },
+  statBox: {
+    flex: 1,
+    minWidth: 60,
+    alignItems: "center",
+    paddingVertical: 6,
+  },
+  statBoxValue: { fontSize: 18, fontFamily: "Inter_700Bold" },
+  statBoxLabel: { fontSize: 10, fontFamily: "Inter_500Medium", marginTop: 2, textTransform: "uppercase" as const },
+  teamTotalsCard: {
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+  },
+  teamTotalsTitle: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+    marginBottom: 12,
+  },
+  teamTotalsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 4,
+  },
+  teamTotalItem: {
+    flex: 1,
+    minWidth: 70,
+    alignItems: "center",
+    paddingVertical: 8,
+  },
+  teamTotalValue: { fontSize: 22, fontFamily: "Inter_700Bold" },
+  teamTotalLabel: { fontSize: 10, fontFamily: "Inter_500Medium", marginTop: 2, textTransform: "uppercase" as const },
+
+  // Organization tab
+  orgDescription: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    lineHeight: 18,
+    marginBottom: 16,
+  },
+  orgSectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 8,
+  },
+  orgSectionTitle: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+  },
+  orgEmpty: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    paddingLeft: 26,
+    marginBottom: 8,
+  },
+  orgCard: {
+    borderRadius: 10,
+    marginBottom: 6,
+  },
+  orgCardContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    gap: 10,
+  },
+  orgDot: { width: 8, height: 8, borderRadius: 4 },
+  orgName: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  orgParent: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 2 },
+  orgMeta: { flexDirection: "row", gap: 8 },
+  orgMetaText: { fontSize: 11, fontFamily: "Inter_400Regular" },
+
+  // Modals
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
@@ -651,5 +1677,4 @@ const styles = StyleSheet.create({
   formErrorText: { fontSize: 13, fontFamily: "Inter_500Medium" },
   saveBtn: { height: 50, borderRadius: 12, alignItems: "center", justifyContent: "center", marginTop: 4 },
   saveBtnText: { color: "#FFF", fontSize: 16, fontFamily: "Inter_600SemiBold" },
-  footerText: { textAlign: "center", fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 24, lineHeight: 16, opacity: 0.6 },
 });

@@ -14,6 +14,7 @@ export const users = pgTable("users", {
   managerId: varchar("manager_id"),
   email: text("email").notNull().unique(),
   phone: text("phone").notNull().default(""),
+  orgUnitId: varchar("org_unit_id"),
   isActive: text("is_active").notNull().default("true"),
   lastLoginAt: timestamp("last_login_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -42,6 +43,17 @@ export const leads = pgTable("leads", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+export const orgUnits = pgTable("org_units", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  type: text("type").notNull().default("team"), // region, area, team
+  parentId: varchar("parent_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export const territories = pgTable("territories", {
   id: varchar("id")
     .primaryKey()
@@ -59,11 +71,20 @@ export const insertUserSchema = createInsertSchema(users).pick({
   fullName: true,
   role: true,
   managerId: true,
+  orgUnitId: true,
   email: true,
   phone: true,
 });
 
+export const insertOrgUnitSchema = createInsertSchema(orgUnits).pick({
+  name: true,
+  type: true,
+  parentId: true,
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
+export type InsertOrgUnit = z.infer<typeof insertOrgUnitSchema>;
 export type User = typeof users.$inferSelect;
 export type Lead = typeof leads.$inferSelect;
 export type Territory = typeof territories.$inferSelect;
+export type OrgUnit = typeof orgUnits.$inferSelect;

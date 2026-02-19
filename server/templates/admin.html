@@ -58,7 +58,7 @@
 
   .role-badge { display: inline-block; padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
   .role-owner { background: #F3E8FF; color: #8B5CF6; }
-  .role-admin { background: #DBEAFE; color: #3B82F6; }
+  .role-manager { background: #DBEAFE; color: #3B82F6; }
   .role-rep { background: #E0E7FF; color: #1E3A5F; }
 
   .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
@@ -77,7 +77,7 @@
   .role-selector button { flex: 1; height: 40px; border: 1px solid #E2E8F0; border-radius: 8px; background: #F8FAFC; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
   .role-selector button.selected { color: #fff; border-color: transparent; }
   .role-selector button[data-role="owner"].selected { background: #8B5CF6; }
-  .role-selector button[data-role="admin"].selected { background: #3B82F6; }
+  .role-selector button[data-role="manager"].selected { background: #3B82F6; }
   .role-selector button[data-role="rep"].selected { background: #1E3A5F; }
   .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
   .modal-actions .btn { flex: 1; }
@@ -149,7 +149,7 @@
 
   <div class="stats-bar">
     <div class="stat-card"><div class="stat-value" id="statOwners" style="color:#8B5CF6">0</div><div class="stat-label">Owners</div></div>
-    <div class="stat-card"><div class="stat-value" id="statAdmins" style="color:#3B82F6">0</div><div class="stat-label">Admins</div></div>
+    <div class="stat-card"><div class="stat-value" id="statManagers" style="color:#3B82F6">0</div><div class="stat-label">Managers</div></div>
     <div class="stat-card"><div class="stat-value" id="statReps" style="color:#1E3A5F">0</div><div class="stat-label">Reps</div></div>
     <div class="stat-card"><div class="stat-value" id="statActive" style="color:#1E293B">0</div><div class="stat-label">Active</div></div>
   </div>
@@ -190,12 +190,12 @@
       <label>Role</label>
       <div class="role-selector" id="roleSelector">
         <button data-role="owner">Owner</button>
-        <button data-role="admin">Admin</button>
+        <button data-role="manager">Manager</button>
         <button data-role="rep">Rep</button>
       </div>
     </div>
     <div class="form-group" id="managerGroup" style="display:none">
-      <label>Assign to Admin</label>
+      <label>Assign to Manager</label>
       <select id="formManager"><option value="">Unassigned</option></select>
     </div>
     <div class="switch-row" id="activeRow" style="display:none">
@@ -235,8 +235,8 @@
     try {
       const data = await api('GET', '/api/auth/me');
       currentUser = data.user;
-      if (currentUser.role !== 'owner' && currentUser.role !== 'admin') {
-        showError('loginError', 'Admin or Owner access required');
+      if (currentUser.role !== 'owner' && currentUser.role !== 'manager') {
+        showError('loginError', 'Manager or Owner access required');
         return;
       }
       showApp();
@@ -303,8 +303,8 @@
       document.getElementById('verifyOtpBtn').textContent = 'Verifying...';
       const data = await api('POST', '/api/auth/otp/verify', { email: pendingEmail, code });
       currentUser = data.user;
-      if (currentUser.role !== 'owner' && currentUser.role !== 'admin') {
-        showError('otpError', 'Admin or Owner access required');
+      if (currentUser.role !== 'owner' && currentUser.role !== 'manager') {
+        showError('otpError', 'Manager or Owner access required');
         document.getElementById('verifyOtpBtn').disabled = false;
         document.getElementById('verifyOtpBtn').textContent = 'Verify & Sign In';
         return;
@@ -364,7 +364,7 @@
 
   function renderStats() {
     document.getElementById('statOwners').textContent = allUsers.filter(u => u.role === 'owner').length;
-    document.getElementById('statAdmins').textContent = allUsers.filter(u => u.role === 'admin').length;
+    document.getElementById('statManagers').textContent = allUsers.filter(u => u.role === 'manager').length;
     document.getElementById('statReps').textContent = allUsers.filter(u => u.role === 'rep').length;
     document.getElementById('statActive').textContent = allUsers.filter(u => u.isActive === 'true').length;
   }
@@ -416,12 +416,12 @@
     document.getElementById('activeRow').style.display = user && user.id !== currentUser.id ? 'flex' : 'none';
     document.getElementById('formError').style.display = 'none';
 
-    selectedRole = user ? user.role : (currentUser.role === 'admin' ? 'rep' : 'rep');
+    selectedRole = user ? user.role : (currentUser.role === 'manager' ? 'rep' : 'rep');
     updateRoleUI();
     updateManagerDropdown(user ? user.managerId : null);
 
     roleBtns.forEach(btn => {
-      if (currentUser.role === 'admin') {
+      if (currentUser.role === 'manager') {
         btn.style.display = btn.dataset.role === 'rep' ? '' : 'none';
       } else {
         btn.style.display = '';
@@ -444,7 +444,7 @@
 
   function updateManagerDropdown(currentManagerId) {
     const sel = document.getElementById('formManager');
-    const admins = allUsers.filter(u => u.role === 'admin');
+    const admins = allUsers.filter(u => u.role === 'manager');
     sel.innerHTML = '<option value="">Unassigned</option>' +
       admins.map(a => '<option value="' + a.id + '"' + (a.id === currentManagerId ? ' selected' : '') + '>' + esc(a.fullName) + '</option>').join('');
   }

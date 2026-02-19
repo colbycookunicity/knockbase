@@ -6,7 +6,7 @@ import { pool } from "./db";
 import * as storage from "./storage";
 import * as shopify from "./shopify";
 import * as shopifyAdmin from "./shopify-admin";
-import { insertUserSchema } from "@shared/schema";
+import { insertUserSchema, insertOrgUnitSchema } from "@shared/schema";
 import { requestOtp, verifyOtp, HydraError } from "./services/hydraClient";
 
 declare module "express-session" {
@@ -27,8 +27,8 @@ async function requireOwnerOrAdmin(req: Request, res: Response, next: NextFuncti
     return res.status(401).json({ message: "Not authenticated" });
   }
   const user = await storage.getUserById(req.session.userId);
-  if (!user || (user.role !== "owner" && user.role !== "admin")) {
-    return res.status(403).json({ message: "Owner or admin access required" });
+  if (!user || (user.role !== "owner" && user.role !== "manager")) {
+    return res.status(403).json({ message: "Owner or manager access required" });
   }
   (req as any).currentUser = user;
   next();
@@ -162,7 +162,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const currentUser = (req as any).currentUser;
       const body = { ...req.body };
 
-      if (currentUser.role === "admin") {
+      if (currentUser.role === "manager") {
         body.role = "rep";
         body.managerId = currentUser.id;
       }
@@ -192,7 +192,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const currentUser = (req as any).currentUser;
       const targetId = req.params.id as string;
 
-      if (currentUser.role === "admin") {
+      if (currentUser.role === "manager") {
         const targetUser = await storage.getUserById(targetId);
         if (!targetUser) {
           return res.status(404).json({ message: "User not found" });
@@ -201,7 +201,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(403).json({ message: "You can only edit your own team members" });
         }
         if (req.body.role && req.body.role !== "rep" && targetUser.id !== currentUser.id) {
-          return res.status(403).json({ message: "Admins can only assign rep role" });
+          return res.status(403).json({ message: "Managers can only assign rep role" });
         }
       }
 
@@ -229,7 +229,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const currentUser = (req as any).currentUser;
     const targetId = req.params.id as string;
 
-    if (currentUser.role === "admin") {
+    if (currentUser.role === "manager") {
       const targetUser = await storage.getUserById(targetId);
       if (!targetUser || targetUser.managerId !== currentUser.id) {
         return res.status(403).json({ message: "You can only delete your own team members" });
@@ -319,6 +319,99 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(404).json({ message: "Territory not found" });
     }
     res.json({ message: "Territory deleted" });
+  });
+
+  // Admin: leads with rep info
+  app.get("/api/admin/leads", requireOwnerOrAdmin, async (req, res) => {
+    try {
+      const currentUser = (req as any).currentUser;
+      const adminLeads = await storage.getAdminLeads(currentUser);
+      res.json(adminLeads);
+    } catch (err) {
+      console.error("Admin leads error:", err);
+      res.status(500).json({ message: "Server error" });
+    }
+  });
+
+  // Admin: team performance stats
+  app.get("/api/admin/team-stats", requireOwnerOrAdmin, async (req, res) => {
+    try {
+      const currentUser = (req as any).currentUser;
+      const stats = await storage.getTeamStats(currentUser);
+      res.json(stats);
+    } catch (err) {
+      console.error("Team stats error:", err);
+      res.status(500).json({ message: "Server error" });
+    }
+  });
+
+  // Admin: reassign a lead to a different rep
+  app.put("/api/admin/leads/:id/reassign", requireOwnerOrAdmin, async (req, res) => {
+    try {
+      const { userId } = req.body;
+      if (!userId) {
+        return res.status(400).json({ message: "userId is required" });
+      }
+      const lead = await storage.reassignLead(req.params.id as string, userId);
+      if (!lead) {
+        return res.status(404).json({ message: "Lead not found" });
+      }
+      res.json(lead);
+    } catch (err) {
+      console.error("Reassign lead error:", err);
+      res.status(500).json({ message: "Server error" });
+    }
+  });
+
+  // Org units CRUD
+  app.get("/api/org-units", requireAuth, async (_req, res) => {
+    try {
+      const units = await storage.getAllOrgUnits();
+      res.json(units);
+    } catch (err) {
+      console.error("Get org units error:", err);
+      res.status(500).json({ message: "Server error" });
+    }
+  });
+
+  app.post("/api/org-units", requireOwner, async (req, res) => {
+    try {
+      const parsed = insertOrgUnitSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid org unit data", errors: parsed.error.flatten() });
+      }
+      const unit = await storage.createOrgUnit(parsed.data);
+      res.status(201).json(unit);
+    } catch (err) {
+      console.error("Create org unit error:", err);
+      res.status(500).json({ message: "Server error" });
+    }
+  });
+
+  app.put("/api/org-units/:id", requireOwner, async (req, res) => {
+    try {
+      const unit = await storage.updateOrgUnit(req.params.id as string, req.body);
+      if (!unit) {
+        return res.status(404).json({ message: "Org unit not found" });
+      }
+      res.json(unit);
+    } catch (err) {
+      console.error("Update org unit error:", err);
+      res.status(500).json({ message: "Server error" });
+    }
+  });
+
+  app.delete("/api/org-units/:id", requireOwner, async (req, res) => {
+    try {
+      const success = await storage.deleteOrgUnit(req.params.id as string);
+      if (!success) {
+        return res.status(404).json({ message: "Org unit not found" });
+      }
+      res.json({ message: "Org unit deleted" });
+    } catch (err) {
+      console.error("Delete org unit error:", err);
+      res.status(500).json({ message: "Server error" });
+    }
   });
 
   app.get("/api/shopify/products", requireAuth, async (req, res) => {

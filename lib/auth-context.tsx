@@ -6,7 +6,7 @@ export interface User {
   id: string;
   username: string;
   fullName: string;
-  role: "owner" | "admin" | "rep";
+  role: "owner" | "manager" | "rep";
   managerId: string | null;
   email: string;
   phone: string;
@@ -21,7 +21,7 @@ interface AuthContextValue {
   isLoading: boolean;
   isAuthenticated: boolean;
   isOwner: boolean;
-  isAdmin: boolean;
+  isManager: boolean;
   canManageUsers: boolean;
   requestOtp: (email: string) => Promise<void>;
   verifyOtp: (email: string, code: string) => Promise<User>;
@@ -83,8 +83,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading,
       isAuthenticated: !!user,
       isOwner: user?.role === "owner",
-      isAdmin: user?.role === "admin",
-      canManageUsers: user?.role === "owner" || user?.role === "admin",
+      isManager: user?.role === "manager",
+      canManageUsers: user?.role === "owner" || user?.role === "manager",
       requestOtp,
       verifyOtp,
       logout,
