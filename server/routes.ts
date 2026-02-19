@@ -477,6 +477,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/shopify/admin-scopes", requireAuth, async (_req, res) => {
+    try {
+      const result = await shopifyAdmin.checkAccessScopes();
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // Shopify POS Draft Order
   app.post("/api/shopify/draft-order", requireAuth, async (req, res) => {
     try {

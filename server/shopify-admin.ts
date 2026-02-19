@@ -164,6 +164,51 @@ export async function createDraftOrder(input: CreateDraftOrderInput) {
   };
 }
 
+export async function checkAccessScopes() {
+  const domain = process.env.SHOPIFY_STORE_DOMAIN || "";
+  const token = process.env.SHOPIFY_ADMIN_ACCESS_TOKEN || "";
+  const tokenPrefix = token ? token.substring(0, 10) + "..." : "(empty)";
+  
+  if (!domain || !token) {
+    return { error: "Missing SHOPIFY_STORE_DOMAIN or SHOPIFY_ADMIN_ACCESS_TOKEN", tokenPrefix };
+  }
+
+  try {
+    const url = `https://${domain}/admin/api/${ADMIN_API_VERSION}/graphql.json`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Shopify-Access-Token": token,
+      },
+      body: JSON.stringify({
+        query: `{ app { installation { accessScopes { handle } } } }`,
+      }),
+    });
+
+    if (!res.ok) {
+      const body = await res.text();
+      return { error: `HTTP ${res.status}`, body: body.slice(0, 300), tokenPrefix };
+    }
+
+    const json = await res.json();
+    if (json.errors) {
+      return { error: "GraphQL errors", errors: json.errors, tokenPrefix };
+    }
+
+    const scopes = json.data?.app?.installation?.accessScopes?.map((s: any) => s.handle) || [];
+    return {
+      tokenPrefix,
+      domain,
+      scopes,
+      hasDraftOrders: scopes.includes("write_draft_orders"),
+      hasQuickSale: scopes.includes("write_quick_sale"),
+    };
+  } catch (err: any) {
+    return { error: err.message, tokenPrefix };
+  }
+}
+
 export async function getDraftOrder(id: string) {
   const query = `
     query getDraftOrder($id: ID!) {
