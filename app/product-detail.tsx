@@ -19,6 +19,32 @@ import * as Linking from "expo-linking";
 import { useTheme } from "@/lib/useTheme";
 import { apiRequest } from "@/lib/query-client";
 
+interface SellingPlan {
+  id: string;
+  name: string;
+  description: string;
+  recurringDeliveries: boolean;
+  priceAdjustments: {
+    adjustmentValue:
+      | { adjustmentPercentage: number }
+      | { adjustmentAmount: { amount: string; currencyCode: string } }
+      | { price: { amount: string; currencyCode: string } };
+  }[];
+}
+
+interface SellingPlanGroup {
+  name: string;
+  sellingPlans: SellingPlan[];
+}
+
+interface SellingPlanAllocation {
+  sellingPlan: { id: string; name: string };
+  priceAdjustments: {
+    price: { amount: string; currencyCode: string };
+    compareAtPrice: { amount: string; currencyCode: string } | null;
+  }[];
+}
+
 interface Variant {
   id: string;
   title: string;
@@ -27,6 +53,7 @@ interface Variant {
   compareAtPrice: { amount: string; currencyCode: string } | null;
   selectedOptions: { name: string; value: string }[];
   image: { url: string; altText: string | null } | null;
+  sellingPlanAllocations?: SellingPlanAllocation[];
 }
 
 interface Product {
@@ -44,6 +71,7 @@ interface Product {
   };
   images: { url: string; altText: string | null; width: number; height: number }[];
   variants: Variant[];
+  sellingPlanGroups?: SellingPlanGroup[];
 }
 
 function formatPrice(amount: string, currency: string) {
@@ -64,6 +92,8 @@ export default function ProductDetailScreen() {
   const [checkingOut, setCheckingOut] = useState(false);
   const [sendingToPOS, setSendingToPOS] = useState(false);
   const [draftOrderName, setDraftOrderName] = useState<string | null>(null);
+  // null = one-time purchase, string = selling plan ID for subscription
+  const [selectedSellingPlanId, setSelectedSellingPlanId] = useState<string | null>(null);
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
 
@@ -100,12 +130,55 @@ export default function ProductDetailScreen() {
     }));
   }, [product]);
 
+  // Flatten all selling plans from all groups for the toggle UI
+  const sellingPlans = useMemo(() => {
+    if (!product?.sellingPlanGroups?.length) return [];
+    const plans: SellingPlan[] = [];
+    product.sellingPlanGroups.forEach((group) => {
+      group.sellingPlans.forEach((sp) => plans.push(sp));
+    });
+    return plans;
+  }, [product]);
+
+  const hasSellingPlans = sellingPlans.length > 0;
+
+  // Get the price for the selected variant under the selected selling plan
+  const resolvedPrice = useMemo(() => {
+    if (!selectedVariant) return null;
+    if (!selectedSellingPlanId) {
+      // One-time purchase: use variant's base price
+      return {
+        price: selectedVariant.price,
+        compareAtPrice: selectedVariant.compareAtPrice,
+      };
+    }
+    // Find the allocation for this selling plan on this variant
+    const alloc = selectedVariant.sellingPlanAllocations?.find(
+      (a) => a.sellingPlan.id === selectedSellingPlanId
+    );
+    if (alloc?.priceAdjustments?.[0]) {
+      return {
+        price: alloc.priceAdjustments[0].price,
+        compareAtPrice: alloc.priceAdjustments[0].compareAtPrice,
+      };
+    }
+    // Fallback to variant base price
+    return {
+      price: selectedVariant.price,
+      compareAtPrice: selectedVariant.compareAtPrice,
+    };
+  }, [selectedVariant, selectedSellingPlanId]);
+
   const handleCheckout = useCallback(async () => {
     if (!selectedVariant) return;
     setCheckingOut(true);
     try {
+      const lineItem: any = { variantId: selectedVariant.id, quantity };
+      if (selectedSellingPlanId) {
+        lineItem.sellingPlanId = selectedSellingPlanId;
+      }
       const res = await apiRequest("POST", "/api/shopify/checkout", {
-        lineItems: [{ variantId: selectedVariant.id, quantity }],
+        lineItems: [lineItem],
       });
       const cart = await res.json();
       if (cart.checkoutUrl) {
@@ -121,15 +194,19 @@ export default function ProductDetailScreen() {
     } finally {
       setCheckingOut(false);
     }
-  }, [selectedVariant, quantity]);
+  }, [selectedVariant, quantity, selectedSellingPlanId]);
 
   const handleSendToPOS = useCallback(async () => {
     if (!selectedVariant) return;
     setSendingToPOS(true);
     setDraftOrderName(null);
     try {
+      const lineItem: any = { variantId: selectedVariant.id, quantity };
+      if (selectedSellingPlanId) {
+        lineItem.sellingPlanId = selectedSellingPlanId;
+      }
       const res = await apiRequest("POST", "/api/shopify/draft-order", {
-        lineItems: [{ variantId: selectedVariant.id, quantity }],
+        lineItems: [lineItem],
       });
       const cart = await res.json();
       setDraftOrderName(cart.name);
@@ -163,7 +240,7 @@ export default function ProductDetailScreen() {
     } finally {
       setSendingToPOS(false);
     }
-  }, [selectedVariant, quantity]);
+  }, [selectedVariant, quantity, selectedSellingPlanId]);
 
   if (isLoading) {
     return (
@@ -263,23 +340,81 @@ export default function ProductDetailScreen() {
           ) : null}
           <Text style={[styles.productTitle, { color: theme.text }]}>{product.title}</Text>
 
-          {selectedVariant && (
+          {resolvedPrice && (
             <View style={styles.priceSection}>
               <View style={styles.priceRow}>
                 <Text style={[styles.price, { color: theme.tint }]}>
-                  {formatPrice(selectedVariant.price.amount, selectedVariant.price.currencyCode)}
+                  {formatPrice(resolvedPrice.price.amount, resolvedPrice.price.currencyCode)}
                 </Text>
-                <Text style={[styles.priceLabel, { color: theme.tint }]}>Wholesale</Text>
+                <Text style={[styles.priceLabel, { color: theme.tint }]}>
+                  {selectedSellingPlanId ? "Subscription" : "Wholesale"}
+                </Text>
               </View>
-              {selectedVariant.compareAtPrice &&
-                parseFloat(selectedVariant.compareAtPrice.amount) > parseFloat(selectedVariant.price.amount) && (
+              {resolvedPrice.compareAtPrice &&
+                parseFloat(resolvedPrice.compareAtPrice.amount) > parseFloat(resolvedPrice.price.amount) && (
                   <View style={styles.priceRow}>
                     <Text style={[styles.comparePrice, { color: theme.textSecondary }]}>
-                      {formatPrice(selectedVariant.compareAtPrice.amount, selectedVariant.compareAtPrice.currencyCode)}
+                      {formatPrice(resolvedPrice.compareAtPrice.amount, resolvedPrice.compareAtPrice.currencyCode)}
                     </Text>
-                    <Text style={[styles.comparePriceLabel, { color: theme.textSecondary }]}>Retail</Text>
+                    <Text style={[styles.comparePriceLabel, { color: theme.textSecondary }]}>
+                      {selectedSellingPlanId ? "One-time price" : "Retail"}
+                    </Text>
                   </View>
                 )}
+            </View>
+          )}
+
+          {hasSellingPlans && (
+            <View style={styles.sellingPlanSection}>
+              <Text style={[styles.optionLabel, { color: theme.textSecondary }]}>Purchase Type</Text>
+              <View style={styles.sellingPlanToggle}>
+                <Pressable
+                  style={[
+                    styles.sellingPlanBtn,
+                    {
+                      backgroundColor: !selectedSellingPlanId ? theme.tint : theme.background,
+                      borderColor: !selectedSellingPlanId ? theme.tint : theme.border,
+                    },
+                  ]}
+                  onPress={() => setSelectedSellingPlanId(null)}
+                >
+                  <Ionicons
+                    name="bag-outline"
+                    size={16}
+                    color={!selectedSellingPlanId ? "#FFF" : theme.text}
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text style={[styles.sellingPlanBtnText, { color: !selectedSellingPlanId ? "#FFF" : theme.text }]}>
+                    One-time
+                  </Text>
+                </Pressable>
+                {sellingPlans.map((plan) => {
+                  const isSelected = selectedSellingPlanId === plan.id;
+                  return (
+                    <Pressable
+                      key={plan.id}
+                      style={[
+                        styles.sellingPlanBtn,
+                        {
+                          backgroundColor: isSelected ? "#8B5CF6" : theme.background,
+                          borderColor: isSelected ? "#8B5CF6" : theme.border,
+                        },
+                      ]}
+                      onPress={() => setSelectedSellingPlanId(plan.id)}
+                    >
+                      <Ionicons
+                        name="repeat-outline"
+                        size={16}
+                        color={isSelected ? "#FFF" : theme.text}
+                        style={{ marginRight: 6 }}
+                      />
+                      <Text style={[styles.sellingPlanBtnText, { color: isSelected ? "#FFF" : theme.text }]}>
+                        {plan.name}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
             </View>
           )}
 
@@ -457,6 +592,17 @@ const styles = StyleSheet.create({
   tagsRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 6 },
   tag: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, borderWidth: 1 },
   tagText: { fontSize: 12, fontFamily: "Inter_500Medium" },
+  sellingPlanSection: { gap: 8, marginTop: 8 },
+  sellingPlanToggle: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  sellingPlanBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  sellingPlanBtnText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   optionsSection: { padding: 16, marginTop: 8, gap: 16 },
   optionGroup: { gap: 8 },
   optionLabel: { fontSize: 13, fontFamily: "Inter_600SemiBold", textTransform: "uppercase", letterSpacing: 0.5 },

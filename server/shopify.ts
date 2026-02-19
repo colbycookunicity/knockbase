@@ -51,6 +51,30 @@ export async function getProducts(first = 20, after?: string) {
                 node { url altText width height }
               }
             }
+            sellingPlanGroups(first: 5) {
+              edges {
+                node {
+                  name
+                  sellingPlans(first: 10) {
+                    edges {
+                      node {
+                        id
+                        name
+                        description
+                        recurringDeliveries
+                        priceAdjustments {
+                          adjustmentValue {
+                            ... on SellingPlanPercentagePriceAdjustment { adjustmentPercentage }
+                            ... on SellingPlanFixedAmountPriceAdjustment { adjustmentAmount { amount currencyCode } }
+                            ... on SellingPlanFixedPriceAdjustment { price { amount currencyCode } }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
             variants(first: 20) {
               edges {
                 node {
@@ -61,6 +85,17 @@ export async function getProducts(first = 20, after?: string) {
                   compareAtPrice { amount currencyCode }
                   selectedOptions { name value }
                   image { url altText }
+                  sellingPlanAllocations(first: 10) {
+                    edges {
+                      node {
+                        sellingPlan { id name }
+                        priceAdjustments {
+                          price { amount currencyCode }
+                          compareAtPrice { amount currencyCode }
+                        }
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -74,7 +109,14 @@ export async function getProducts(first = 20, after?: string) {
   const products = data.products.edges.map((e: any) => ({
     ...e.node,
     images: e.node.images.edges.map((ie: any) => ie.node),
-    variants: e.node.variants.edges.map((ve: any) => ve.node),
+    variants: e.node.variants.edges.map((ve: any) => ({
+      ...ve.node,
+      sellingPlanAllocations: ve.node.sellingPlanAllocations?.edges?.map((a: any) => a.node) || [],
+    })),
+    sellingPlanGroups: e.node.sellingPlanGroups?.edges?.map((g: any) => ({
+      ...g.node,
+      sellingPlans: g.node.sellingPlans.edges.map((sp: any) => sp.node),
+    })) || [],
     cursor: e.cursor,
   }));
   return { products, pageInfo: data.products.pageInfo };
@@ -106,6 +148,30 @@ export async function getProduct(id: string) {
             node { url altText width height }
           }
         }
+        sellingPlanGroups(first: 5) {
+          edges {
+            node {
+              name
+              sellingPlans(first: 10) {
+                edges {
+                  node {
+                    id
+                    name
+                    description
+                    recurringDeliveries
+                    priceAdjustments {
+                      adjustmentValue {
+                        ... on SellingPlanPercentagePriceAdjustment { adjustmentPercentage }
+                        ... on SellingPlanFixedAmountPriceAdjustment { adjustmentAmount { amount currencyCode } }
+                        ... on SellingPlanFixedPriceAdjustment { price { amount currencyCode } }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
         variants(first: 30) {
           edges {
             node {
@@ -116,6 +182,17 @@ export async function getProduct(id: string) {
               compareAtPrice { amount currencyCode }
               selectedOptions { name value }
               image { url altText }
+              sellingPlanAllocations(first: 10) {
+                edges {
+                  node {
+                    sellingPlan { id name }
+                    priceAdjustments {
+                      price { amount currencyCode }
+                      compareAtPrice { amount currencyCode }
+                    }
+                  }
+                }
+              }
             }
           }
         }
@@ -127,7 +204,14 @@ export async function getProduct(id: string) {
   return {
     ...data.product,
     images: data.product.images.edges.map((ie: any) => ie.node),
-    variants: data.product.variants.edges.map((ve: any) => ve.node),
+    variants: data.product.variants.edges.map((ve: any) => ({
+      ...ve.node,
+      sellingPlanAllocations: ve.node.sellingPlanAllocations?.edges?.map((a: any) => a.node) || [],
+    })),
+    sellingPlanGroups: data.product.sellingPlanGroups?.edges?.map((g: any) => ({
+      ...g.node,
+      sellingPlans: g.node.sellingPlans.edges.map((sp: any) => sp.node),
+    })) || [],
   };
 }
 
@@ -180,7 +264,7 @@ export async function searchProducts(searchQuery: string, first = 20) {
   }));
 }
 
-export async function createCheckout(lineItems: { variantId: string; quantity: number }[]) {
+export async function createCheckout(lineItems: { variantId: string; quantity: number; sellingPlanId?: string }[]) {
   const query = `
     mutation cartCreate($input: CartInput!) {
       cartCreate(input: $input) {
@@ -218,10 +302,16 @@ export async function createCheckout(lineItems: { variantId: string; quantity: n
     }
   `;
   const input = {
-    lines: lineItems.map((item) => ({
-      merchandiseId: item.variantId,
-      quantity: item.quantity,
-    })),
+    lines: lineItems.map((item) => {
+      const line: any = {
+        merchandiseId: item.variantId,
+        quantity: item.quantity,
+      };
+      if (item.sellingPlanId) {
+        line.sellingPlanId = item.sellingPlanId;
+      }
+      return line;
+    }),
   };
   const data = await shopifyQuery(query, { input });
   if (data.cartCreate.userErrors?.length > 0) {
@@ -264,16 +354,22 @@ export async function createCheckout(lineItems: { variantId: string; quantity: n
 }
 
 export async function createCartWithAttributes(
-  lineItems: { variantId: string; quantity: number }[],
+  lineItems: { variantId: string; quantity: number; sellingPlanId?: string }[],
   note?: string,
   customAttributes?: { key: string; value: string }[],
   customerEmail?: string,
 ) {
   const cartInput: any = {
-    lines: lineItems.map((item) => ({
-      merchandiseId: item.variantId,
-      quantity: item.quantity,
-    })),
+    lines: lineItems.map((item) => {
+      const line: any = {
+        merchandiseId: item.variantId,
+        quantity: item.quantity,
+      };
+      if (item.sellingPlanId) {
+        line.sellingPlanId = item.sellingPlanId;
+      }
+      return line;
+    }),
   };
 
   if (note) {
