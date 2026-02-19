@@ -123,9 +123,14 @@ export default function AdminScreen() {
   const [formPhone, setFormPhone] = useState("");
   const [formRole, setFormRole] = useState<Role>("rep");
   const [formManagerId, setFormManagerId] = useState<string | null>(null);
+  const [formOrgUnitId, setFormOrgUnitId] = useState<string | null>(null);
   const [formActive, setFormActive] = useState(true);
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // Org-based filtering
+  const [leadOrgFilter, setLeadOrgFilter] = useState<string>("");
+  const [statsOrgFilter, setStatsOrgFilter] = useState<string>("");
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -139,10 +144,11 @@ export default function AdminScreen() {
     }
   }, []);
 
-  const fetchAdminLeads = useCallback(async () => {
+  const fetchAdminLeads = useCallback(async (orgId?: string) => {
     setLeadsLoading(true);
     try {
-      const res = await apiRequest("GET", "/api/admin/leads");
+      const url = orgId ? `/api/admin/leads?orgUnitId=${encodeURIComponent(orgId)}` : "/api/admin/leads";
+      const res = await apiRequest("GET", url);
       const data = await res.json();
       setAdminLeads(data);
     } catch (err) {
@@ -152,10 +158,11 @@ export default function AdminScreen() {
     }
   }, []);
 
-  const fetchTeamStats = useCallback(async () => {
+  const fetchTeamStats = useCallback(async (orgId?: string) => {
     setStatsLoading(true);
     try {
-      const res = await apiRequest("GET", "/api/admin/team-stats");
+      const url = orgId ? `/api/admin/team-stats?orgUnitId=${encodeURIComponent(orgId)}` : "/api/admin/team-stats";
+      const res = await apiRequest("GET", url);
       const data = await res.json();
       setTeamStats(data);
     } catch (err) {
@@ -180,13 +187,23 @@ export default function AdminScreen() {
 
   useEffect(() => {
     fetchUsers();
+    fetchOrgUnits();
   }, [fetchUsers]);
 
   useEffect(() => {
-    if (activeTab === "leads" && adminLeads.length === 0) fetchAdminLeads();
-    if (activeTab === "performance" && teamStats.length === 0) fetchTeamStats();
+    if (activeTab === "leads" && adminLeads.length === 0) fetchAdminLeads(leadOrgFilter || undefined);
+    if (activeTab === "performance" && teamStats.length === 0) fetchTeamStats(statsOrgFilter || undefined);
     if (activeTab === "organization") fetchOrgUnits();
   }, [activeTab]);
+
+  // Re-fetch when org filters change
+  useEffect(() => {
+    if (activeTab === "leads") fetchAdminLeads(leadOrgFilter || undefined);
+  }, [leadOrgFilter]);
+
+  useEffect(() => {
+    if (activeTab === "performance") fetchTeamStats(statsOrgFilter || undefined);
+  }, [statsOrgFilter]);
 
   const managers = useMemo(() => {
     return users.filter((u) => u.role === "manager");
@@ -198,6 +215,12 @@ export default function AdminScreen() {
     return mgr?.fullName || null;
   };
 
+  const getOrgUnitName = (orgUnitId: string | null | undefined) => {
+    if (!orgUnitId) return null;
+    const unit = orgUnits.find((u) => u.id === orgUnitId);
+    return unit?.name || null;
+  };
+
   // ============ TEAM TAB ============
   const openCreateModal = () => {
     setEditingUser(null);
@@ -207,6 +230,7 @@ export default function AdminScreen() {
     setFormPhone("");
     setFormRole(isManager ? "rep" : "rep");
     setFormManagerId(isManager ? (currentUser?.id ?? null) : null);
+    setFormOrgUnitId(null);
     setFormActive(true);
     setFormError("");
     setModalVisible(true);
@@ -220,6 +244,7 @@ export default function AdminScreen() {
     setFormPhone(user.phone);
     setFormRole(user.role as Role);
     setFormManagerId(user.managerId);
+    setFormOrgUnitId((user as any).orgUnitId || null);
     setFormActive(user.isActive === "true");
     setFormError("");
     setModalVisible(true);
@@ -242,6 +267,7 @@ export default function AdminScreen() {
           role: formRole,
           isActive: formActive,
           managerId: formRole === "rep" ? formManagerId : null,
+          orgUnitId: formOrgUnitId,
         };
         const res = await apiRequest("PUT", `/api/users/${editingUser.id}`, body);
         const updated = await res.json();
@@ -253,6 +279,7 @@ export default function AdminScreen() {
           email: formEmail.trim(),
           phone: formPhone.trim(),
           role: formRole,
+          orgUnitId: formOrgUnitId,
         };
         if (formRole === "rep" && formManagerId) {
           body.managerId = formManagerId;
@@ -517,6 +544,7 @@ export default function AdminScreen() {
     const isActive = item.isActive === "true";
     const roleConf = ROLE_CONFIG[item.role as Role] || ROLE_CONFIG.rep;
     const mgrName = getManagerName(item.managerId);
+    const orgName = getOrgUnitName((item as any).orgUnitId);
     const lastLogin = formatLastLogin(item.lastLoginAt);
 
     return (
@@ -532,6 +560,7 @@ export default function AdminScreen() {
             <Text style={[styles.userMeta, { color: theme.textSecondary }]} numberOfLines={1}>
               {item.email}
               {mgrName ? ` \u00B7 ${mgrName}'s team` : ""}
+              {orgName ? ` \u00B7 ${orgName}` : ""}
             </Text>
             <Text style={[styles.userLastLogin, { color: theme.textSecondary }]} numberOfLines={1}>
               Last login: {lastLogin}
@@ -786,6 +815,59 @@ export default function AdminScreen() {
         })}
       </ScrollView>
 
+      {/* Org unit filter */}
+      {orgUnits.length > 0 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={[styles.filterBar, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}
+          contentContainerStyle={{ paddingHorizontal: 12, gap: 6, alignItems: "center" }}
+        >
+          <Ionicons name="git-network-outline" size={14} color={theme.textSecondary} />
+          <Pressable
+            style={[
+              styles.filterChip,
+              {
+                backgroundColor: !leadOrgFilter ? theme.tint + "18" : theme.background,
+                borderColor: !leadOrgFilter ? theme.tint : theme.border,
+              },
+            ]}
+            onPress={() => setLeadOrgFilter("")}
+          >
+            <Text style={{ color: !leadOrgFilter ? theme.tint : theme.textSecondary, fontFamily: "Inter_500Medium", fontSize: 11 }}>
+              All Units
+            </Text>
+          </Pressable>
+          {[...orgUnits]
+            .sort((a, b) => {
+              const order: Record<string, number> = { region: 1, area: 2, team: 3 };
+              return (order[a.type] || 9) - (order[b.type] || 9);
+            })
+            .map((unit) => {
+              const selected = leadOrgFilter === unit.id;
+              const typeColors: Record<string, string> = { region: "#8B5CF6", area: "#3B82F6", team: "#10B981" };
+              const color = typeColors[unit.type] || theme.tint;
+              return (
+                <Pressable
+                  key={unit.id}
+                  style={[
+                    styles.filterChip,
+                    {
+                      backgroundColor: selected ? color + "18" : theme.background,
+                      borderColor: selected ? color : theme.border,
+                    },
+                  ]}
+                  onPress={() => setLeadOrgFilter(selected ? "" : unit.id)}
+                >
+                  <Text style={{ color: selected ? color : theme.textSecondary, fontFamily: "Inter_500Medium", fontSize: 11 }}>
+                    {unit.name}
+                  </Text>
+                </Pressable>
+              );
+            })}
+        </ScrollView>
+      )}
+
       {/* Rep filter + search */}
       <View style={[styles.searchRow, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
         <View style={[styles.searchInput, { backgroundColor: theme.background, borderColor: theme.border }]}>
@@ -881,6 +963,59 @@ export default function AdminScreen() {
         ))}
       </View>
 
+      {/* Org unit filter */}
+      {orgUnits.length > 0 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={[styles.filterBar, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}
+          contentContainerStyle={{ paddingHorizontal: 12, gap: 6, alignItems: "center" }}
+        >
+          <Ionicons name="git-network-outline" size={14} color={theme.textSecondary} />
+          <Pressable
+            style={[
+              styles.filterChip,
+              {
+                backgroundColor: !statsOrgFilter ? theme.tint + "18" : theme.background,
+                borderColor: !statsOrgFilter ? theme.tint : theme.border,
+              },
+            ]}
+            onPress={() => setStatsOrgFilter("")}
+          >
+            <Text style={{ color: !statsOrgFilter ? theme.tint : theme.textSecondary, fontFamily: "Inter_500Medium", fontSize: 11 }}>
+              All Units
+            </Text>
+          </Pressable>
+          {[...orgUnits]
+            .sort((a, b) => {
+              const order: Record<string, number> = { region: 1, area: 2, team: 3 };
+              return (order[a.type] || 9) - (order[b.type] || 9);
+            })
+            .map((unit) => {
+              const selected = statsOrgFilter === unit.id;
+              const typeColors: Record<string, string> = { region: "#8B5CF6", area: "#3B82F6", team: "#10B981" };
+              const color = typeColors[unit.type] || theme.tint;
+              return (
+                <Pressable
+                  key={unit.id}
+                  style={[
+                    styles.filterChip,
+                    {
+                      backgroundColor: selected ? color + "18" : theme.background,
+                      borderColor: selected ? color : theme.border,
+                    },
+                  ]}
+                  onPress={() => setStatsOrgFilter(selected ? "" : unit.id)}
+                >
+                  <Text style={{ color: selected ? color : theme.textSecondary, fontFamily: "Inter_500Medium", fontSize: 11 }}>
+                    {unit.name}
+                  </Text>
+                </Pressable>
+              );
+            })}
+        </ScrollView>
+      )}
+
       {statsLoading ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color={theme.tint} />
@@ -948,7 +1083,19 @@ export default function AdminScreen() {
     };
 
     const getUserCount = (unitId: string) => {
-      return users.filter((u) => (u as any).orgUnitId === unitId).length;
+      // Count users in this unit + all descendant units
+      const descendantIds: string[] = [];
+      const collectDescendants = (parentId: string) => {
+        for (const u of orgUnits) {
+          if (u.parentId === parentId) {
+            descendantIds.push(u.id);
+            collectDescendants(u.id);
+          }
+        }
+      };
+      collectDescendants(unitId);
+      const allIds = [unitId, ...descendantIds];
+      return users.filter((u) => allIds.includes((u as any).orgUnitId)).length;
     };
 
     return (
@@ -978,31 +1125,54 @@ export default function AdminScreen() {
                       No {label.toLowerCase()}s yet
                     </Text>
                   ) : (
-                    items.map((unit) => (
-                      <View key={unit.id} style={[styles.orgCard, { backgroundColor: theme.surface }]}>
-                        <Pressable style={styles.orgCardContent} onPress={() => openOrgEditModal(unit)}>
-                          <View style={[styles.orgDot, { backgroundColor: color }]} />
-                          <View style={{ flex: 1 }}>
-                            <Text style={[styles.orgName, { color: theme.text }]}>{unit.name}</Text>
-                            {getParentName(unit.parentId) && (
-                              <Text style={[styles.orgParent, { color: theme.textSecondary }]}>
-                                Parent: {getParentName(unit.parentId)}
-                              </Text>
-                            )}
-                          </View>
-                          <View style={styles.orgMeta}>
-                            {getChildCount(unit.id) > 0 && (
-                              <Text style={[styles.orgMetaText, { color: theme.textSecondary }]}>
-                                {getChildCount(unit.id)} sub-units
-                              </Text>
-                            )}
-                          </View>
-                          <Pressable onPress={() => handleOrgDelete(unit)} style={styles.actionBtn}>
-                            <Ionicons name="trash-outline" size={18} color={theme.danger} />
+                    items.map((unit) => {
+                      const memberCount = getUserCount(unit.id);
+                      const directMembers = users.filter((u) => (u as any).orgUnitId === unit.id);
+                      return (
+                        <View key={unit.id} style={[styles.orgCard, { backgroundColor: theme.surface }]}>
+                          <Pressable style={styles.orgCardContent} onPress={() => openOrgEditModal(unit)}>
+                            <View style={[styles.orgDot, { backgroundColor: color }]} />
+                            <View style={{ flex: 1 }}>
+                              <Text style={[styles.orgName, { color: theme.text }]}>{unit.name}</Text>
+                              {getParentName(unit.parentId) && (
+                                <Text style={[styles.orgParent, { color: theme.textSecondary }]}>
+                                  Parent: {getParentName(unit.parentId)}
+                                </Text>
+                              )}
+                              {directMembers.length > 0 && (
+                                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
+                                  {directMembers.map((m) => {
+                                    const rc = ROLE_CONFIG[m.role as Role] || ROLE_CONFIG.rep;
+                                    return (
+                                      <View key={m.id} style={{ backgroundColor: rc.color + "14", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                                        <Text style={{ fontSize: 10, color: rc.color, fontFamily: "Inter_500Medium" }}>{m.fullName}</Text>
+                                      </View>
+                                    );
+                                  })}
+                                </View>
+                              )}
+                            </View>
+                            <View style={styles.orgMeta}>
+                              {memberCount > 0 && (
+                                <View style={{ backgroundColor: theme.background, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 }}>
+                                  <Text style={[styles.orgMetaText, { color: theme.text, fontFamily: "Inter_600SemiBold" }]}>
+                                    {memberCount}
+                                  </Text>
+                                </View>
+                              )}
+                              {getChildCount(unit.id) > 0 && (
+                                <Text style={[styles.orgMetaText, { color: theme.textSecondary }]}>
+                                  {getChildCount(unit.id)} sub
+                                </Text>
+                              )}
+                            </View>
+                            <Pressable onPress={() => handleOrgDelete(unit)} style={styles.actionBtn}>
+                              <Ionicons name="trash-outline" size={18} color={theme.danger} />
+                            </Pressable>
                           </Pressable>
-                        </Pressable>
-                      </View>
-                    ))
+                        </View>
+                      );
+                    })
                   )}
                 </View>
               );
@@ -1036,12 +1206,12 @@ export default function AdminScreen() {
           </Pressable>
         )}
         {activeTab === "leads" && (
-          <Pressable onPress={fetchAdminLeads} style={styles.addBtn}>
+          <Pressable onPress={() => fetchAdminLeads(leadOrgFilter || undefined)} style={styles.addBtn}>
             <Ionicons name="refresh" size={22} color={theme.tint} />
           </Pressable>
         )}
         {activeTab === "performance" && (
-          <Pressable onPress={fetchTeamStats} style={styles.addBtn}>
+          <Pressable onPress={() => fetchTeamStats(statsOrgFilter || undefined)} style={styles.addBtn}>
             <Ionicons name="refresh" size={22} color={theme.tint} />
           </Pressable>
         )}
@@ -1218,6 +1388,55 @@ export default function AdminScreen() {
                         </Pressable>
                       );
                     })}
+                  </ScrollView>
+                </View>
+              )}
+
+              {orgUnits.length > 0 && (
+                <View style={styles.formGroup}>
+                  <Text style={[styles.label, { color: theme.textSecondary }]}>Org Unit</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.adminScroll}>
+                    <Pressable
+                      style={[
+                        styles.adminChip,
+                        {
+                          backgroundColor: !formOrgUnitId ? theme.accent : theme.background,
+                          borderColor: !formOrgUnitId ? theme.accent : theme.border,
+                        },
+                      ]}
+                      onPress={() => setFormOrgUnitId(null)}
+                    >
+                      <Text style={{ color: !formOrgUnitId ? "#FFF" : theme.text, fontFamily: "Inter_500Medium", fontSize: 13 }}>
+                        None
+                      </Text>
+                    </Pressable>
+                    {[...orgUnits]
+                      .sort((a, b) => {
+                        const order: Record<string, number> = { region: 1, area: 2, team: 3 };
+                        return (order[a.type] || 9) - (order[b.type] || 9);
+                      })
+                      .map((unit) => {
+                        const selected = formOrgUnitId === unit.id;
+                        const typeColors: Record<string, string> = { region: "#8B5CF6", area: "#3B82F6", team: "#10B981" };
+                        const typeColor = typeColors[unit.type] || theme.tint;
+                        return (
+                          <Pressable
+                            key={unit.id}
+                            style={[
+                              styles.adminChip,
+                              {
+                                backgroundColor: selected ? typeColor + "20" : theme.background,
+                                borderColor: selected ? typeColor : theme.border,
+                              },
+                            ]}
+                            onPress={() => setFormOrgUnitId(unit.id)}
+                          >
+                            <Text style={{ color: selected ? typeColor : theme.text, fontFamily: "Inter_500Medium", fontSize: 13 }}>
+                              {unit.name} ({unit.type})
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
                   </ScrollView>
                 </View>
               )}
