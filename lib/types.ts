@@ -22,6 +22,7 @@ export const LEAD_STATUS_CONFIG: Record<
 
 export interface Lead {
   id: string;
+  userId?: string;
   firstName: string;
   lastName: string;
   phone: string;
