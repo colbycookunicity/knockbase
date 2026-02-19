@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>KnockBase Admin - Team Management</title>
+<title>KnockBase Admin Panel</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #F1F5F9; color: #1E293B; min-height: 100vh; }
@@ -24,8 +24,8 @@
   .btn-danger { background: #EF4444; color: #fff; }
   .btn-outline { background: transparent; border: 1px solid #E2E8F0; color: #64748B; }
   .btn-outline:hover { border-color: #1E3A5F; color: #1E3A5F; }
+  .btn-success { background: #10B981; color: #fff; }
   .error-msg { color: #EF4444; font-size: 13px; margin-top: 8px; }
-  .success-msg { color: #1E3A5F; font-size: 13px; margin-top: 8px; }
   .login-footer { text-align: center; margin-top: 24px; font-size: 11px; color: #94A3B8; }
   .back-link { font-size: 13px; color: #1E3A5F; cursor: pointer; display: inline-block; margin-bottom: 16px; }
   .back-link:hover { text-decoration: underline; }
@@ -39,6 +39,15 @@
   .topbar-user strong { color: #fff; }
   .topbar .btn-outline { border-color: rgba(255,255,255,0.2); color: #fff; }
   .topbar .btn-outline:hover { border-color: rgba(255,255,255,0.5); }
+
+  /* Tab bar */
+  .tab-bar { display: flex; background: #fff; border-bottom: 1px solid #E2E8F0; position: sticky; top: 60px; z-index: 9; }
+  .tab-btn { flex: 1; padding: 14px 16px; font-size: 13px; font-weight: 600; color: #64748B; background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 6px; }
+  .tab-btn:hover { color: #1E3A5F; background: #F8FAFC; }
+  .tab-btn.active { color: #1E3A5F; border-bottom-color: #1E3A5F; }
+  .tab-btn svg { width: 16px; height: 16px; }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
 
   .stats-bar { display: flex; gap: 16px; padding: 20px 24px; flex-wrap: wrap; }
   .stat-card { background: #fff; border-radius: 12px; padding: 16px 20px; flex: 1; min-width: 120px; box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
@@ -67,6 +76,55 @@
 
   .actions { display: flex; gap: 6px; }
 
+  /* Lead status badges */
+  .lead-status { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; }
+  .lead-status .dot { width: 6px; height: 6px; border-radius: 50%; }
+
+  /* Filter bar */
+  .filter-bar { display: flex; gap: 8px; padding: 16px 24px; flex-wrap: wrap; align-items: center; background: #fff; border-bottom: 1px solid #E2E8F0; }
+  .filter-chip { padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1px solid #E2E8F0; background: #F8FAFC; color: #64748B; transition: all 0.2s; }
+  .filter-chip:hover { border-color: #1E3A5F; }
+  .filter-chip.active { background: #1E3A5F; color: #fff; border-color: #1E3A5F; }
+  .filter-chip.status-active { background: var(--status-color); color: #fff; border-color: var(--status-color); }
+  .search-input { height: 36px; border: 1px solid #E2E8F0; border-radius: 8px; padding: 0 12px; font-size: 13px; background: #F8FAFC; min-width: 200px; }
+  .search-input:focus { outline: none; border-color: #1E3A5F; background: #fff; }
+
+  /* Performance cards */
+  .perf-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; padding: 20px 24px; }
+  .perf-card { background: #fff; border-radius: 12px; padding: 18px; box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
+  .perf-card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .perf-avatar { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; color: #fff; }
+  .perf-name { font-size: 15px; font-weight: 600; }
+  .perf-meta { font-size: 11px; color: #64748B; margin-top: 2px; }
+  .perf-stats { display: flex; flex-wrap: wrap; gap: 4px; }
+  .perf-stat { flex: 1; min-width: 60px; text-align: center; padding: 8px 4px; }
+  .perf-stat-value { font-size: 20px; font-weight: 700; }
+  .perf-stat-label { font-size: 10px; color: #64748B; text-transform: uppercase; letter-spacing: 0.3px; margin-top: 2px; }
+
+  /* Team totals */
+  .team-totals { background: #fff; border-radius: 12px; padding: 20px; margin: 20px 24px 0; box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
+  .team-totals h3 { font-size: 15px; font-weight: 600; margin-bottom: 14px; }
+  .team-totals .perf-stats { justify-content: space-around; }
+
+  /* Period selector */
+  .period-bar { display: flex; gap: 4px; padding: 12px 24px; background: #fff; border-bottom: 1px solid #E2E8F0; }
+  .period-btn { padding: 8px 18px; border-radius: 20px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; background: transparent; color: #64748B; transition: all 0.2s; }
+  .period-btn:hover { background: #F1F5F9; }
+  .period-btn.active { background: #1E3A5F; color: #fff; }
+
+  /* Org tab */
+  .org-section { margin-bottom: 24px; }
+  .org-section-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 15px; font-weight: 600; }
+  .org-section-header .icon { width: 24px; height: 24px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #fff; }
+  .org-card { background: #fff; border-radius: 10px; padding: 12px 16px; margin-bottom: 6px; display: flex; align-items: center; gap: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+  .org-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .org-card-info { flex: 1; }
+  .org-card-name { font-size: 14px; font-weight: 600; }
+  .org-card-parent { font-size: 11px; color: #64748B; margin-top: 2px; }
+  .org-card-meta { font-size: 11px; color: #94A3B8; }
+  .org-description { font-size: 13px; color: #64748B; line-height: 1.5; padding: 16px 24px 0; }
+  .org-empty { font-size: 13px; color: #94A3B8; padding-left: 32px; }
+
   .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 100; align-items: center; justify-content: center; padding: 20px; }
   .modal-overlay.active { display: flex; }
   .modal { background: #fff; border-radius: 16px; padding: 28px; max-width: 480px; width: 100%; max-height: 85vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.15); }
@@ -93,6 +151,7 @@
 
   .empty-state { text-align: center; padding: 60px 20px; color: #94A3B8; }
   .empty-state p { font-size: 15px; }
+  .loading { text-align: center; padding: 40px; color: #94A3B8; font-size: 14px; }
 
   @media (max-width: 768px) {
     .topbar { padding: 12px 16px; }
@@ -103,6 +162,11 @@
     .user-table { font-size: 13px; }
     .user-table th, .user-table td { padding: 10px 12px; }
     .hide-mobile { display: none; }
+    .filter-bar { padding: 12px 16px; }
+    .perf-grid { padding: 16px; grid-template-columns: 1fr; }
+    .team-totals { margin: 16px; }
+    .period-bar { padding: 10px 16px; }
+    .tab-btn { font-size: 12px; padding: 12px 8px; }
   }
 </style>
 </head>
@@ -140,29 +204,74 @@
 
 <div id="app" class="app">
   <div class="topbar">
-    <h1>Team Management</h1>
+    <h1>Admin Panel</h1>
     <div class="topbar-right">
       <span class="topbar-user">Signed in as <strong id="currentUserName"></strong></span>
       <button class="btn btn-sm btn-outline" id="logoutBtn">Sign Out</button>
     </div>
   </div>
 
-  <div class="stats-bar">
-    <div class="stat-card"><div class="stat-value" id="statOwners" style="color:#8B5CF6">0</div><div class="stat-label">Owners</div></div>
-    <div class="stat-card"><div class="stat-value" id="statManagers" style="color:#3B82F6">0</div><div class="stat-label">Managers</div></div>
-    <div class="stat-card"><div class="stat-value" id="statReps" style="color:#1E3A5F">0</div><div class="stat-label">Reps</div></div>
-    <div class="stat-card"><div class="stat-value" id="statActive" style="color:#1E293B">0</div><div class="stat-label">Active</div></div>
+  <!-- Tab bar -->
+  <div class="tab-bar">
+    <button class="tab-btn active" data-tab="team">&#128101; Team</button>
+    <button class="tab-btn" data-tab="leads">&#128196; Leads</button>
+    <button class="tab-btn" data-tab="performance">&#128200; Stats</button>
+    <button class="tab-btn" data-tab="organization" id="orgTabBtn" style="display:none">&#127760; Org</button>
   </div>
 
-  <div class="content">
-    <div class="section-header">
-      <h2>All Users</h2>
-      <button class="btn btn-sm btn-primary" id="addUserBtn">+ Add User</button>
+  <!-- TEAM TAB -->
+  <div id="tab-team" class="tab-content active">
+    <div class="stats-bar">
+      <div class="stat-card"><div class="stat-value" id="statOwners" style="color:#8B5CF6">0</div><div class="stat-label">Owners</div></div>
+      <div class="stat-card"><div class="stat-value" id="statManagers" style="color:#3B82F6">0</div><div class="stat-label">Managers</div></div>
+      <div class="stat-card"><div class="stat-value" id="statReps" style="color:#1E3A5F">0</div><div class="stat-label">Reps</div></div>
+      <div class="stat-card"><div class="stat-value" id="statActive" style="color:#1E293B">0</div><div class="stat-label">Active</div></div>
     </div>
-    <div id="userTableWrap"></div>
+    <div class="content">
+      <div class="section-header">
+        <h2>All Users</h2>
+        <button class="btn btn-sm btn-primary" id="addUserBtn">+ Add User</button>
+      </div>
+      <div id="userTableWrap"></div>
+    </div>
+  </div>
+
+  <!-- LEADS TAB -->
+  <div id="tab-leads" class="tab-content">
+    <div class="filter-bar" id="leadFilterBar"></div>
+    <div class="filter-bar" id="leadRepFilterBar" style="border-top: none; padding-top: 0;">
+      <input type="text" class="search-input" id="leadSearchInput" placeholder="Search leads by name, address, rep...">
+    </div>
+    <div class="content">
+      <div class="section-header">
+        <h2 id="leadResultCount">Leads</h2>
+        <button class="btn btn-sm btn-outline" id="refreshLeadsBtn">Refresh</button>
+      </div>
+      <div id="leadsTableWrap"><div class="loading">Loading leads...</div></div>
+    </div>
+  </div>
+
+  <!-- PERFORMANCE TAB -->
+  <div id="tab-performance" class="tab-content">
+    <div class="period-bar" id="periodBar"></div>
+    <div id="teamTotalsWrap"></div>
+    <div id="perfGridWrap" class="perf-grid"></div>
+  </div>
+
+  <!-- ORGANIZATION TAB -->
+  <div id="tab-organization" class="tab-content">
+    <p class="org-description">Organize your team using a SalesRabbit-style hierarchy: <strong>Regions</strong> (by state), <strong>Areas</strong> (by city/county), and <strong>Teams</strong> (sub-groups).</p>
+    <div class="content" style="padding-top: 16px;">
+      <div class="section-header">
+        <h2>Org Structure</h2>
+        <button class="btn btn-sm btn-primary" id="addOrgBtn">+ Add Unit</button>
+      </div>
+      <div id="orgWrap"></div>
+    </div>
   </div>
 </div>
 
+<!-- User Modal -->
 <div class="modal-overlay" id="userModal">
   <div class="modal">
     <h2 id="modalTitle">Add User</h2>
@@ -210,6 +319,34 @@
   </div>
 </div>
 
+<!-- Org Unit Modal -->
+<div class="modal-overlay" id="orgModal">
+  <div class="modal">
+    <h2 id="orgModalTitle">Add Org Unit</h2>
+    <div class="form-group">
+      <label>Name</label>
+      <input type="text" id="orgFormName" placeholder="e.g. Mississippi, Jackson Metro, Team Alpha">
+    </div>
+    <div class="form-group">
+      <label>Type</label>
+      <div class="role-selector" id="orgTypeSelector">
+        <button data-type="region" style="--sel-color:#8B5CF6">Region</button>
+        <button data-type="area" style="--sel-color:#3B82F6">Area</button>
+        <button data-type="team" style="--sel-color:#10B981">Team</button>
+      </div>
+    </div>
+    <div class="form-group" id="orgParentGroup" style="display:none">
+      <label>Parent Unit</label>
+      <select id="orgFormParent"><option value="">None</option></select>
+    </div>
+    <div id="orgFormError" class="error-msg" style="display:none"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" id="orgCancelBtn">Cancel</button>
+      <button class="btn btn-primary" id="orgSaveBtn">Save</button>
+    </div>
+  </div>
+</div>
+
 <script>
 (function() {
   let currentUser = null;
@@ -218,6 +355,33 @@
   let selectedRole = 'rep';
   let pendingEmail = '';
 
+  // Leads state
+  let adminLeads = [];
+  let leadFilter = 'all';
+  let leadRepFilter = 'all';
+  let leadsLoaded = false;
+
+  // Performance state
+  let teamStats = [];
+  let statsPeriod = 'all';
+  let statsLoaded = false;
+
+  // Org state
+  let orgUnits = [];
+  let editingOrgId = null;
+  let selectedOrgType = 'team';
+
+  const STATUS_CONFIG = {
+    untouched: { label: 'Untouched', color: '#94A3B8' },
+    not_home: { label: 'Not Home', color: '#F59E0B' },
+    not_interested: { label: 'Not Interested', color: '#EF4444' },
+    callback: { label: 'Callback', color: '#3B82F6' },
+    appointment: { label: 'Appointment', color: '#8B5CF6' },
+    sold: { label: 'Sold', color: '#10B981' },
+    follow_up: { label: 'Follow Up', color: '#06B6D4' },
+  };
+
+  // ========== API ==========
   async function api(method, path, body) {
     const opts = { method, credentials: 'include', headers: {} };
     if (body) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
@@ -231,6 +395,24 @@
     return res.json();
   }
 
+  function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+  function timeAgo(dateStr) {
+    if (!dateStr) return 'Never';
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now - date;
+    const mins = Math.floor(diffMs / 60000);
+    const hrs = Math.floor(diffMs / 3600000);
+    const days = Math.floor(diffMs / 86400000);
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return mins + 'm ago';
+    if (hrs < 24) return hrs + 'h ago';
+    if (days < 7) return days + 'd ago';
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+
+  // ========== AUTH ==========
   async function checkAuth() {
     try {
       const data = await api('GET', '/api/auth/me');
@@ -245,14 +427,8 @@
     }
   }
 
-  function showError(id, msg) {
-    const el = document.getElementById(id);
-    el.textContent = msg;
-    el.style.display = 'block';
-  }
-  function hideError(id) {
-    document.getElementById(id).style.display = 'none';
-  }
+  function showError(id, msg) { const el = document.getElementById(id); el.textContent = msg; el.style.display = 'block'; }
+  function hideError(id) { document.getElementById(id).style.display = 'none'; }
 
   function showLogin() {
     document.getElementById('loginScreen').style.display = 'flex';
@@ -265,9 +441,28 @@
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('app').style.display = 'block';
     document.getElementById('currentUserName').textContent = currentUser.fullName;
+    if (currentUser.role === 'owner') {
+      document.getElementById('orgTabBtn').style.display = '';
+    }
     loadUsers();
   }
 
+  // ========== TABS ==========
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+
+      // Lazy load tab data
+      if (btn.dataset.tab === 'leads' && !leadsLoaded) loadAdminLeads();
+      if (btn.dataset.tab === 'performance' && !statsLoaded) loadTeamStats();
+      if (btn.dataset.tab === 'organization') loadOrgUnits();
+    });
+  });
+
+  // ========== OTP LOGIN ==========
   document.getElementById('sendOtpBtn').addEventListener('click', async () => {
     const email = document.getElementById('loginEmail').value.trim();
     hideError('loginError');
@@ -335,10 +530,7 @@
       document.getElementById('resendOtpBtn').textContent = 'Sending...';
       await api('POST', '/api/auth/otp/request', { email: pendingEmail });
       document.getElementById('resendOtpBtn').textContent = 'Code Sent!';
-      setTimeout(() => {
-        document.getElementById('resendOtpBtn').textContent = 'Resend Code';
-        document.getElementById('resendOtpBtn').disabled = false;
-      }, 3000);
+      setTimeout(() => { document.getElementById('resendOtpBtn').textContent = 'Resend Code'; document.getElementById('resendOtpBtn').disabled = false; }, 3000);
     } catch (err) {
       showError('otpError', err.message);
       document.getElementById('resendOtpBtn').textContent = 'Resend Code';
@@ -352,56 +544,287 @@
     showLogin();
   });
 
+  // ========== TEAM TAB ==========
   async function loadUsers() {
     try {
       allUsers = await api('GET', '/api/users');
-      renderStats();
-      renderTable();
+      renderTeamStats();
+      renderTeamTable();
     } catch (err) {
       console.error('Failed to load users:', err);
     }
   }
 
-  function renderStats() {
+  function renderTeamStats() {
     document.getElementById('statOwners').textContent = allUsers.filter(u => u.role === 'owner').length;
     document.getElementById('statManagers').textContent = allUsers.filter(u => u.role === 'manager').length;
     document.getElementById('statReps').textContent = allUsers.filter(u => u.role === 'rep').length;
     document.getElementById('statActive').textContent = allUsers.filter(u => u.isActive === 'true').length;
   }
 
-  function renderTable() {
+  function renderTeamTable() {
     const wrap = document.getElementById('userTableWrap');
     if (!allUsers.length) {
       wrap.innerHTML = '<div class="empty-state"><p>No team members yet. Click "+ Add User" to get started.</p></div>';
       return;
     }
-
     let html = '<table class="user-table"><thead><tr><th>Name</th><th>Email</th><th class="hide-mobile">Phone</th><th>Role</th><th class="hide-mobile">Team</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
-
     for (const u of allUsers) {
       const isActive = u.isActive === 'true';
       const isSelf = u.id === currentUser.id;
       const roleClass = 'role-' + u.role;
-      const adminName = u.managerId ? getAdminName(u.managerId) : '';
+      const mgrName = u.managerId ? getManagerName(u.managerId) : '';
       html += '<tr class="' + (isActive ? '' : 'inactive') + '">';
       html += '<td><strong>' + esc(u.fullName) + '</strong>' + (isSelf ? ' <span style="color:#1E3A5F;font-size:11px">(you)</span>' : '') + '</td>';
       html += '<td>' + esc(u.email) + '</td>';
       html += '<td class="hide-mobile">' + esc(u.phone || '-') + '</td>';
       html += '<td><span class="role-badge ' + roleClass + '">' + esc(u.role) + '</span></td>';
-      html += '<td class="hide-mobile">' + (adminName ? esc(adminName) + "'s team" : '-') + '</td>';
+      html += '<td class="hide-mobile">' + (mgrName ? esc(mgrName) + "'s team" : '-') + '</td>';
       html += '<td><span class="status-dot ' + (isActive ? 'status-active' : 'status-inactive') + '"></span>' + (isActive ? 'Active' : 'Inactive') + '</td>';
       html += '<td class="actions"><button class="btn btn-sm btn-outline" onclick="window._editUser(\'' + u.id + '\')">Edit</button>';
       if (!isSelf) html += '<button class="btn btn-sm btn-danger" onclick="window._deleteUser(\'' + u.id + '\', \'' + esc(u.fullName) + '\')">Delete</button>';
       html += '</td></tr>';
     }
-
     html += '</tbody></table>';
     wrap.innerHTML = html;
   }
 
-  function getAdminName(id) { const a = allUsers.find(u => u.id === id); return a ? a.fullName : ''; }
-  function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+  function getManagerName(id) { const a = allUsers.find(u => u.id === id); return a ? a.fullName : ''; }
 
+  // ========== LEADS TAB ==========
+  async function loadAdminLeads() {
+    document.getElementById('leadsTableWrap').innerHTML = '<div class="loading">Loading leads...</div>';
+    try {
+      adminLeads = await api('GET', '/api/admin/leads');
+      leadsLoaded = true;
+      renderLeadFilters();
+      renderLeadsTable();
+    } catch (err) {
+      document.getElementById('leadsTableWrap').innerHTML = '<div class="empty-state"><p>Failed to load leads</p></div>';
+    }
+  }
+
+  function renderLeadFilters() {
+    const bar = document.getElementById('leadFilterBar');
+    const counts = {};
+    adminLeads.forEach(l => { counts[l.status] = (counts[l.status] || 0) + 1; });
+
+    let html = '<span class="filter-chip ' + (leadFilter === 'all' ? 'active' : '') + '" data-filter="all">All (' + adminLeads.length + ')</span>';
+    for (const [status, config] of Object.entries(STATUS_CONFIG)) {
+      const count = counts[status] || 0;
+      if (count === 0) continue;
+      const isActive = leadFilter === status;
+      html += '<span class="filter-chip' + (isActive ? ' status-active' : '') + '" data-filter="' + status + '" style="' + (isActive ? 'background:' + config.color + ';color:#fff;border-color:' + config.color : '') + '">' + config.label + ' (' + count + ')</span>';
+    }
+
+    // Rep filter chips
+    const reps = new Map();
+    adminLeads.forEach(l => { if (!reps.has(l.userId)) reps.set(l.userId, l.repName); });
+    const repBar = document.getElementById('leadRepFilterBar');
+    let repHtml = '<input type="text" class="search-input" id="leadSearchInput" placeholder="Search leads by name, address, rep...">';
+    repHtml += '<span class="filter-chip ' + (leadRepFilter === 'all' ? 'active' : '') + '" data-rep="all">All Reps</span>';
+    reps.forEach((name, id) => {
+      repHtml += '<span class="filter-chip ' + (leadRepFilter === id ? 'active' : '') + '" data-rep="' + id + '">' + esc(name) + '</span>';
+    });
+
+    bar.innerHTML = html;
+    repBar.innerHTML = repHtml;
+
+    // Re-bind events
+    bar.querySelectorAll('.filter-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        leadFilter = chip.dataset.filter === leadFilter ? 'all' : chip.dataset.filter;
+        renderLeadFilters();
+        renderLeadsTable();
+      });
+    });
+    repBar.querySelectorAll('.filter-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        leadRepFilter = chip.dataset.rep === leadRepFilter ? 'all' : chip.dataset.rep;
+        renderLeadFilters();
+        renderLeadsTable();
+      });
+    });
+    document.getElementById('leadSearchInput').addEventListener('input', () => renderLeadsTable());
+  }
+
+  function renderLeadsTable() {
+    const wrap = document.getElementById('leadsTableWrap');
+    const search = (document.getElementById('leadSearchInput')?.value || '').toLowerCase();
+
+    let filtered = adminLeads;
+    if (leadFilter !== 'all') filtered = filtered.filter(l => l.status === leadFilter);
+    if (leadRepFilter !== 'all') filtered = filtered.filter(l => l.userId === leadRepFilter);
+    if (search) filtered = filtered.filter(l =>
+      (l.firstName || '').toLowerCase().includes(search) ||
+      (l.lastName || '').toLowerCase().includes(search) ||
+      (l.address || '').toLowerCase().includes(search) ||
+      (l.repName || '').toLowerCase().includes(search)
+    );
+    filtered.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+
+    document.getElementById('leadResultCount').textContent = filtered.length + ' Lead' + (filtered.length !== 1 ? 's' : '');
+
+    if (!filtered.length) {
+      wrap.innerHTML = '<div class="empty-state"><p>No leads found</p></div>';
+      return;
+    }
+
+    let html = '<table class="user-table"><thead><tr><th>Lead</th><th class="hide-mobile">Address</th><th>Status</th><th>Rep</th><th class="hide-mobile">Last Activity</th></tr></thead><tbody>';
+    for (const l of filtered) {
+      const sc = STATUS_CONFIG[l.status] || STATUS_CONFIG.untouched;
+      const name = [l.firstName, l.lastName].filter(Boolean).join(' ') || 'No Name';
+      html += '<tr>';
+      html += '<td><strong>' + esc(name) + '</strong></td>';
+      html += '<td class="hide-mobile">' + esc(l.address || '-') + '</td>';
+      html += '<td><span class="lead-status" style="background:' + sc.color + '18;color:' + sc.color + '"><span class="dot" style="background:' + sc.color + '"></span>' + sc.label + '</span></td>';
+      html += '<td>' + esc(l.repName) + '</td>';
+      html += '<td class="hide-mobile">' + timeAgo(l.updatedAt) + '</td>';
+      html += '</tr>';
+    }
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+  }
+
+  document.getElementById('refreshLeadsBtn').addEventListener('click', loadAdminLeads);
+
+  // ========== PERFORMANCE TAB ==========
+  async function loadTeamStats() {
+    document.getElementById('perfGridWrap').innerHTML = '<div class="loading">Loading stats...</div>';
+    try {
+      teamStats = await api('GET', '/api/admin/team-stats');
+      statsLoaded = true;
+      renderPeriodBar();
+      renderPerformance();
+    } catch (err) {
+      document.getElementById('perfGridWrap').innerHTML = '<div class="empty-state"><p>Failed to load stats</p></div>';
+    }
+  }
+
+  function renderPeriodBar() {
+    const bar = document.getElementById('periodBar');
+    bar.innerHTML = ['today', 'week', 'all'].map(p =>
+      '<button class="period-btn ' + (statsPeriod === p ? 'active' : '') + '" data-period="' + p + '">' +
+      (p === 'today' ? 'Today' : p === 'week' ? 'This Week' : 'All Time') + '</button>'
+    ).join('');
+    bar.querySelectorAll('.period-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        statsPeriod = btn.dataset.period;
+        renderPeriodBar();
+        renderPerformance();
+      });
+    });
+  }
+
+  function renderPerformance() {
+    const sorted = [...teamStats].sort((a, b) => b.sales - a.sales);
+    const totals = teamStats.reduce((acc, s) => ({
+      totalLeads: acc.totalLeads + s.totalLeads,
+      doorsKnocked: acc.doorsKnocked + s.doorsKnocked,
+      contacts: acc.contacts + s.contacts,
+      appointments: acc.appointments + s.appointments,
+      sales: acc.sales + s.sales,
+      todayDoors: acc.todayDoors + s.todayDoors,
+      todaySales: acc.todaySales + s.todaySales,
+      weekDoors: acc.weekDoors + s.weekDoors,
+      weekSales: acc.weekSales + s.weekSales,
+    }), { totalLeads: 0, doorsKnocked: 0, contacts: 0, appointments: 0, sales: 0, todayDoors: 0, todaySales: 0, weekDoors: 0, weekSales: 0 });
+
+    const getDoors = (s) => statsPeriod === 'today' ? s.todayDoors : statsPeriod === 'week' ? s.weekDoors : s.doorsKnocked;
+    const getSales = (s) => statsPeriod === 'today' ? s.todaySales : statsPeriod === 'week' ? s.weekSales : s.sales;
+
+    // Team totals
+    let totalsHtml = '<div class="team-totals"><h3>Team Totals</h3><div class="perf-stats">';
+    totalsHtml += '<div class="perf-stat"><div class="perf-stat-value" style="color:#3B82F6">' + getDoors(totals) + '</div><div class="perf-stat-label">Doors</div></div>';
+    if (statsPeriod === 'all') {
+      totalsHtml += '<div class="perf-stat"><div class="perf-stat-value" style="color:#06B6D4">' + totals.contacts + '</div><div class="perf-stat-label">Contacts</div></div>';
+      totalsHtml += '<div class="perf-stat"><div class="perf-stat-value" style="color:#8B5CF6">' + totals.appointments + '</div><div class="perf-stat-label">Appts</div></div>';
+    }
+    totalsHtml += '<div class="perf-stat"><div class="perf-stat-value" style="color:#10B981">' + getSales(totals) + '</div><div class="perf-stat-label">Sales</div></div>';
+    totalsHtml += '<div class="perf-stat"><div class="perf-stat-value">' + totals.totalLeads + '</div><div class="perf-stat-label">Total Leads</div></div>';
+    totalsHtml += '</div></div>';
+    document.getElementById('teamTotalsWrap').innerHTML = totalsHtml;
+
+    // Per-rep cards
+    if (!sorted.length) {
+      document.getElementById('perfGridWrap').innerHTML = '<div class="empty-state"><p>No team performance data</p></div>';
+      return;
+    }
+
+    let html = '';
+    for (const s of sorted) {
+      const roleColors = { owner: '#8B5CF6', manager: '#3B82F6', rep: '#1E3A5F' };
+      const color = roleColors[s.role] || '#1E3A5F';
+      const initials = s.repName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+      html += '<div class="perf-card">';
+      html += '<div class="perf-card-header">';
+      html += '<div class="perf-avatar" style="background:' + color + '">' + initials + '</div>';
+      html += '<div style="flex:1"><div class="perf-name">' + esc(s.repName) + '</div>';
+      html += '<div class="perf-meta">' + s.totalLeads + ' leads &middot; Last active: ' + timeAgo(s.lastActivity) + '</div></div>';
+      html += '<span class="role-badge role-' + s.role + '">' + s.role + '</span>';
+      html += '</div>';
+      html += '<div class="perf-stats">';
+      html += '<div class="perf-stat"><div class="perf-stat-value" style="color:#3B82F6">' + getDoors(s) + '</div><div class="perf-stat-label">Doors</div></div>';
+      if (statsPeriod === 'all') {
+        html += '<div class="perf-stat"><div class="perf-stat-value" style="color:#06B6D4">' + s.contacts + '</div><div class="perf-stat-label">Contacts</div></div>';
+        html += '<div class="perf-stat"><div class="perf-stat-value" style="color:#8B5CF6">' + s.appointments + '</div><div class="perf-stat-label">Appts</div></div>';
+      }
+      html += '<div class="perf-stat"><div class="perf-stat-value" style="color:#10B981">' + getSales(s) + '</div><div class="perf-stat-label">Sales</div></div>';
+      if (statsPeriod === 'all') {
+        html += '<div class="perf-stat"><div class="perf-stat-value">' + s.contactRate + '%</div><div class="perf-stat-label">Contact</div></div>';
+        html += '<div class="perf-stat"><div class="perf-stat-value">' + s.closeRate + '%</div><div class="perf-stat-label">Close</div></div>';
+      }
+      html += '</div></div>';
+    }
+    document.getElementById('perfGridWrap').innerHTML = html;
+  }
+
+  // ========== ORGANIZATION TAB ==========
+  async function loadOrgUnits() {
+    try {
+      orgUnits = await api('GET', '/api/org-units');
+      renderOrgUnits();
+    } catch (err) {
+      document.getElementById('orgWrap').innerHTML = '<div class="empty-state"><p>Failed to load org units</p></div>';
+    }
+  }
+
+  function renderOrgUnits() {
+    const wrap = document.getElementById('orgWrap');
+    const types = [
+      { type: 'region', label: 'Region', color: '#8B5CF6' },
+      { type: 'area', label: 'Area', color: '#3B82F6' },
+      { type: 'team', label: 'Team', color: '#10B981' },
+    ];
+
+    let html = '';
+    for (const t of types) {
+      const items = orgUnits.filter(u => u.type === t.type);
+      html += '<div class="org-section">';
+      html += '<div class="org-section-header"><span class="icon" style="background:' + t.color + '">' + t.label[0] + '</span> ' + t.label + 's (' + items.length + ')</div>';
+      if (!items.length) {
+        html += '<p class="org-empty">No ' + t.label.toLowerCase() + 's yet</p>';
+      } else {
+        for (const unit of items) {
+          const parentName = unit.parentId ? (orgUnits.find(u => u.id === unit.parentId)?.name || '') : '';
+          const childCount = orgUnits.filter(u => u.parentId === unit.id).length;
+          html += '<div class="org-card">';
+          html += '<div class="org-dot" style="background:' + t.color + '"></div>';
+          html += '<div class="org-card-info"><div class="org-card-name">' + esc(unit.name) + '</div>';
+          if (parentName) html += '<div class="org-card-parent">Parent: ' + esc(parentName) + '</div>';
+          html += '</div>';
+          if (childCount) html += '<span class="org-card-meta">' + childCount + ' sub-units</span>';
+          html += '<button class="btn btn-sm btn-outline" onclick="window._editOrg(\'' + unit.id + '\')">Edit</button>';
+          html += '<button class="btn btn-sm btn-danger" onclick="window._deleteOrg(\'' + unit.id + '\', \'' + esc(unit.name) + '\')">Delete</button>';
+          html += '</div>';
+        }
+      }
+      html += '</div>';
+    }
+    wrap.innerHTML = html;
+  }
+
+  // ========== USER MODAL ==========
   const modal = document.getElementById('userModal');
   const roleBtns = document.querySelectorAll('#roleSelector button');
 
@@ -415,47 +838,31 @@
     document.getElementById('formActive').checked = user ? user.isActive === 'true' : true;
     document.getElementById('activeRow').style.display = user && user.id !== currentUser.id ? 'flex' : 'none';
     document.getElementById('formError').style.display = 'none';
-
     selectedRole = user ? user.role : (currentUser.role === 'manager' ? 'rep' : 'rep');
     updateRoleUI();
     updateManagerDropdown(user ? user.managerId : null);
-
     roleBtns.forEach(btn => {
-      if (currentUser.role === 'manager') {
-        btn.style.display = btn.dataset.role === 'rep' ? '' : 'none';
-      } else {
-        btn.style.display = '';
-      }
+      if (currentUser.role === 'manager') { btn.style.display = btn.dataset.role === 'rep' ? '' : 'none'; }
+      else { btn.style.display = ''; }
     });
-
     modal.classList.add('active');
   }
 
-  function closeModal() {
-    modal.classList.remove('active');
-    editingUserId = null;
-  }
+  function closeModal() { modal.classList.remove('active'); editingUserId = null; }
 
   function updateRoleUI() {
     roleBtns.forEach(btn => btn.classList.toggle('selected', btn.dataset.role === selectedRole));
-    const showManager = selectedRole === 'rep' && currentUser.role === 'owner';
-    document.getElementById('managerGroup').style.display = showManager ? 'block' : 'none';
+    document.getElementById('managerGroup').style.display = selectedRole === 'rep' && currentUser.role === 'owner' ? 'block' : 'none';
   }
 
   function updateManagerDropdown(currentManagerId) {
     const sel = document.getElementById('formManager');
-    const admins = allUsers.filter(u => u.role === 'manager');
+    const managers = allUsers.filter(u => u.role === 'manager');
     sel.innerHTML = '<option value="">Unassigned</option>' +
-      admins.map(a => '<option value="' + a.id + '"' + (a.id === currentManagerId ? ' selected' : '') + '>' + esc(a.fullName) + '</option>').join('');
+      managers.map(a => '<option value="' + a.id + '"' + (a.id === currentManagerId ? ' selected' : '') + '>' + esc(a.fullName) + '</option>').join('');
   }
 
-  roleBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-      selectedRole = btn.dataset.role;
-      updateRoleUI();
-    });
-  });
-
+  roleBtns.forEach(btn => { btn.addEventListener('click', () => { selectedRole = btn.dataset.role; updateRoleUI(); }); });
   document.getElementById('addUserBtn').addEventListener('click', () => openModal(null));
   document.getElementById('cancelBtn').addEventListener('click', closeModal);
   modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
@@ -469,21 +876,15 @@
     const managerId = document.getElementById('formManager').value || null;
     const errEl = document.getElementById('formError');
     errEl.style.display = 'none';
-
     if (!fullName || !email) { errEl.textContent = 'Full name and email are required'; errEl.style.display = 'block'; return; }
-
     const body = { fullName, email, username, phone, role: selectedRole };
     if (selectedRole === 'rep' && managerId) body.managerId = managerId;
     if (selectedRole !== 'rep') body.managerId = null;
     if (editingUserId) body.isActive = isActive;
-
     try {
       document.getElementById('saveBtn').disabled = true;
-      if (editingUserId) {
-        await api('PUT', '/api/users/' + editingUserId, body);
-      } else {
-        await api('POST', '/api/users', body);
-      }
+      if (editingUserId) { await api('PUT', '/api/users/' + editingUserId, body); }
+      else { await api('POST', '/api/users', body); }
       closeModal();
       await loadUsers();
     } catch (err) {
@@ -494,19 +895,91 @@
     }
   });
 
-  window._editUser = function(id) {
-    const user = allUsers.find(u => u.id === id);
-    if (user) openModal(user);
-  };
-
+  window._editUser = function(id) { const user = allUsers.find(u => u.id === id); if (user) openModal(user); };
   window._deleteUser = async function(id, name) {
     if (!confirm('Delete ' + name + '? This cannot be undone.')) return;
+    try { await api('DELETE', '/api/users/' + id); await loadUsers(); }
+    catch (err) { alert('Failed to delete user: ' + err.message); }
+  };
+
+  // ========== ORG MODAL ==========
+  const orgModal = document.getElementById('orgModal');
+  const orgTypeBtns = document.querySelectorAll('#orgTypeSelector button');
+
+  function openOrgModal(unit) {
+    editingOrgId = unit ? unit.id : null;
+    document.getElementById('orgModalTitle').textContent = unit ? 'Edit Org Unit' : 'Add Org Unit';
+    document.getElementById('orgFormName').value = unit ? unit.name : '';
+    selectedOrgType = unit ? unit.type : 'team';
+    updateOrgTypeUI();
+    updateOrgParentDropdown(unit ? unit.parentId : null);
+    document.getElementById('orgFormError').style.display = 'none';
+    orgModal.classList.add('active');
+  }
+
+  function closeOrgModal() { orgModal.classList.remove('active'); editingOrgId = null; }
+
+  function updateOrgTypeUI() {
+    orgTypeBtns.forEach(btn => {
+      const isSelected = btn.dataset.type === selectedOrgType;
+      btn.classList.toggle('selected', isSelected);
+      if (isSelected) {
+        const colors = { region: '#8B5CF6', area: '#3B82F6', team: '#10B981' };
+        btn.style.background = colors[btn.dataset.type];
+        btn.style.color = '#fff';
+        btn.style.borderColor = 'transparent';
+      } else {
+        btn.style.background = '';
+        btn.style.color = '';
+        btn.style.borderColor = '';
+      }
+    });
+    document.getElementById('orgParentGroup').style.display = selectedOrgType !== 'region' ? 'block' : 'none';
+    updateOrgParentDropdown(null);
+  }
+
+  function updateOrgParentDropdown(currentParentId) {
+    const sel = document.getElementById('orgFormParent');
+    const parents = orgUnits.filter(u => {
+      if (selectedOrgType === 'area') return u.type === 'region';
+      if (selectedOrgType === 'team') return u.type === 'area' || u.type === 'region';
+      return false;
+    });
+    sel.innerHTML = '<option value="">None</option>' +
+      parents.map(p => '<option value="' + p.id + '"' + (p.id === currentParentId ? ' selected' : '') + '>' + esc(p.name) + ' (' + p.type + ')</option>').join('');
+  }
+
+  orgTypeBtns.forEach(btn => { btn.addEventListener('click', () => { selectedOrgType = btn.dataset.type; updateOrgTypeUI(); }); });
+  document.getElementById('addOrgBtn').addEventListener('click', () => openOrgModal(null));
+  document.getElementById('orgCancelBtn').addEventListener('click', closeOrgModal);
+  orgModal.addEventListener('click', (e) => { if (e.target === orgModal) closeOrgModal(); });
+
+  document.getElementById('orgSaveBtn').addEventListener('click', async () => {
+    const name = document.getElementById('orgFormName').value.trim();
+    const parentId = document.getElementById('orgFormParent').value || null;
+    const errEl = document.getElementById('orgFormError');
+    errEl.style.display = 'none';
+    if (!name) { errEl.textContent = 'Name is required'; errEl.style.display = 'block'; return; }
     try {
-      await api('DELETE', '/api/users/' + id);
-      await loadUsers();
+      document.getElementById('orgSaveBtn').disabled = true;
+      const body = { name, type: selectedOrgType, parentId };
+      if (editingOrgId) { await api('PUT', '/api/org-units/' + editingOrgId, body); }
+      else { await api('POST', '/api/org-units', body); }
+      closeOrgModal();
+      await loadOrgUnits();
     } catch (err) {
-      alert('Failed to delete user: ' + err.message);
+      errEl.textContent = err.message;
+      errEl.style.display = 'block';
+    } finally {
+      document.getElementById('orgSaveBtn').disabled = false;
     }
+  });
+
+  window._editOrg = function(id) { const unit = orgUnits.find(u => u.id === id); if (unit) openOrgModal(unit); };
+  window._deleteOrg = async function(id, name) {
+    if (!confirm('Delete "' + name + '"? This cannot be undone.')) return;
+    try { await api('DELETE', '/api/org-units/' + id); await loadOrgUnits(); }
+    catch (err) { alert('Failed to delete: ' + err.message); }
   };
 
   checkAuth();
