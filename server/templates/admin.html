@@ -240,7 +240,6 @@
   <div id="tab-leads" class="tab-content">
     <div class="filter-bar" id="leadFilterBar"></div>
     <div class="filter-bar" id="leadRepFilterBar" style="border-top: none; padding-top: 0;">
-      <input type="text" class="search-input" id="leadSearchInput" placeholder="Search leads by name, address, rep...">
     </div>
     <div class="content">
       <div class="section-header">
@@ -253,7 +252,11 @@
 
   <!-- PERFORMANCE TAB -->
   <div id="tab-performance" class="tab-content">
-    <div class="period-bar" id="periodBar"></div>
+    <div class="period-bar" id="periodBar">
+    </div>
+    <div class="filter-bar" style="padding-top:0;border-top:none">
+      <select class="search-input" id="statsOrgFilterSelect" style="min-width:180px;cursor:pointer"><option value="">All Org Units</option></select>
+    </div>
     <div id="teamTotalsWrap"></div>
     <div id="perfGridWrap" class="perf-grid"></div>
   </div>
@@ -307,6 +310,10 @@
       <label>Assign to Manager</label>
       <select id="formManager"><option value="">Unassigned</option></select>
     </div>
+    <div class="form-group" id="orgUnitGroup">
+      <label>Org Unit</label>
+      <select id="formOrgUnit"><option value="">None</option></select>
+    </div>
     <div class="switch-row" id="activeRow" style="display:none">
       <label>Account Active</label>
       <label class="toggle"><input type="checkbox" id="formActive" checked><span class="slider"></span></label>
@@ -359,11 +366,13 @@
   let adminLeads = [];
   let leadFilter = 'all';
   let leadRepFilter = 'all';
+  let leadOrgFilter = '';
   let leadsLoaded = false;
 
   // Performance state
   let teamStats = [];
   let statsPeriod = 'all';
+  let statsOrgFilter = '';
   let statsLoaded = false;
 
   // Org state
@@ -548,6 +557,8 @@
   async function loadUsers() {
     try {
       allUsers = await api('GET', '/api/users');
+      // Also load org units so we can display them on team table + user form
+      try { orgUnits = await api('GET', '/api/org-units'); } catch(e) {}
       renderTeamStats();
       renderTeamTable();
     } catch (err) {
@@ -568,18 +579,20 @@
       wrap.innerHTML = '<div class="empty-state"><p>No team members yet. Click "+ Add User" to get started.</p></div>';
       return;
     }
-    let html = '<table class="user-table"><thead><tr><th>Name</th><th>Email</th><th class="hide-mobile">Phone</th><th>Role</th><th class="hide-mobile">Team</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
+    let html = '<table class="user-table"><thead><tr><th>Name</th><th>Email</th><th class="hide-mobile">Phone</th><th>Role</th><th class="hide-mobile">Team</th><th class="hide-mobile">Org Unit</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
     for (const u of allUsers) {
       const isActive = u.isActive === 'true';
       const isSelf = u.id === currentUser.id;
       const roleClass = 'role-' + u.role;
       const mgrName = u.managerId ? getManagerName(u.managerId) : '';
+      const orgName = u.orgUnitId ? getOrgUnitName(u.orgUnitId) : '';
       html += '<tr class="' + (isActive ? '' : 'inactive') + '">';
       html += '<td><strong>' + esc(u.fullName) + '</strong>' + (isSelf ? ' <span style="color:#1E3A5F;font-size:11px">(you)</span>' : '') + '</td>';
       html += '<td>' + esc(u.email) + '</td>';
       html += '<td class="hide-mobile">' + esc(u.phone || '-') + '</td>';
       html += '<td><span class="role-badge ' + roleClass + '">' + esc(u.role) + '</span></td>';
       html += '<td class="hide-mobile">' + (mgrName ? esc(mgrName) + "'s team" : '-') + '</td>';
+      html += '<td class="hide-mobile">' + (orgName ? esc(orgName) : '<span style="color:#94A3B8">-</span>') + '</td>';
       html += '<td><span class="status-dot ' + (isActive ? 'status-active' : 'status-inactive') + '"></span>' + (isActive ? 'Active' : 'Inactive') + '</td>';
       html += '<td class="actions"><button class="btn btn-sm btn-outline" onclick="window._editUser(\'' + u.id + '\')">Edit</button>';
       if (!isSelf) html += '<button class="btn btn-sm btn-danger" onclick="window._deleteUser(\'' + u.id + '\', \'' + esc(u.fullName) + '\')">Delete</button>';
@@ -590,12 +603,14 @@
   }
 
   function getManagerName(id) { const a = allUsers.find(u => u.id === id); return a ? a.fullName : ''; }
+  function getOrgUnitName(id) { const u = orgUnits.find(o => o.id === id); return u ? u.name : ''; }
 
   // ========== LEADS TAB ==========
   async function loadAdminLeads() {
     document.getElementById('leadsTableWrap').innerHTML = '<div class="loading">Loading leads...</div>';
     try {
-      adminLeads = await api('GET', '/api/admin/leads');
+      const url = leadOrgFilter ? '/api/admin/leads?orgUnitId=' + encodeURIComponent(leadOrgFilter) : '/api/admin/leads';
+      adminLeads = await api('GET', url);
       leadsLoaded = true;
       renderLeadFilters();
       renderLeadsTable();
@@ -621,7 +636,8 @@
     const reps = new Map();
     adminLeads.forEach(l => { if (!reps.has(l.userId)) reps.set(l.userId, l.repName); });
     const repBar = document.getElementById('leadRepFilterBar');
-    let repHtml = '<input type="text" class="search-input" id="leadSearchInput" placeholder="Search leads by name, address, rep...">';
+    let repHtml = '<select class="search-input" id="leadOrgFilterSelect" style="min-width:150px;cursor:pointer"><option value="">All Org Units</option></select>';
+    repHtml += '<input type="text" class="search-input" id="leadSearchInput" placeholder="Search leads by name, address, rep...">';
     repHtml += '<span class="filter-chip ' + (leadRepFilter === 'all' ? 'active' : '') + '" data-rep="all">All Reps</span>';
     reps.forEach((name, id) => {
       repHtml += '<span class="filter-chip ' + (leadRepFilter === id ? 'active' : '') + '" data-rep="' + id + '">' + esc(name) + '</span>';
@@ -629,6 +645,20 @@
 
     bar.innerHTML = html;
     repBar.innerHTML = repHtml;
+
+    // Populate org unit filter dropdown
+    const orgSel = document.getElementById('leadOrgFilterSelect');
+    if (orgSel) {
+      const typeOrder = { region: 1, area: 2, team: 3 };
+      const sorted = [...orgUnits].sort((a, b) => (typeOrder[a.type] || 9) - (typeOrder[b.type] || 9));
+      orgSel.innerHTML = '<option value="">All Org Units</option>' +
+        sorted.map(u => '<option value="' + u.id + '"' + (u.id === leadOrgFilter ? ' selected' : '') + '>' + esc(u.name) + ' (' + u.type + ')</option>').join('');
+      orgSel.onchange = function() {
+        leadOrgFilter = this.value;
+        leadsLoaded = false;
+        loadAdminLeads();
+      };
+    }
 
     // Re-bind events
     bar.querySelectorAll('.filter-chip').forEach(chip => {
@@ -692,13 +722,29 @@
   async function loadTeamStats() {
     document.getElementById('perfGridWrap').innerHTML = '<div class="loading">Loading stats...</div>';
     try {
-      teamStats = await api('GET', '/api/admin/team-stats');
+      const url = statsOrgFilter ? '/api/admin/team-stats?orgUnitId=' + encodeURIComponent(statsOrgFilter) : '/api/admin/team-stats';
+      teamStats = await api('GET', url);
       statsLoaded = true;
       renderPeriodBar();
+      renderStatsOrgFilter();
       renderPerformance();
     } catch (err) {
       document.getElementById('perfGridWrap').innerHTML = '<div class="empty-state"><p>Failed to load stats</p></div>';
     }
+  }
+
+  function renderStatsOrgFilter() {
+    const orgSel = document.getElementById('statsOrgFilterSelect');
+    if (!orgSel) return;
+    const typeOrder = { region: 1, area: 2, team: 3 };
+    const sorted = [...orgUnits].sort((a, b) => (typeOrder[a.type] || 9) - (typeOrder[b.type] || 9));
+    orgSel.innerHTML = '<option value="">All Org Units</option>' +
+      sorted.map(u => '<option value="' + u.id + '"' + (u.id === statsOrgFilter ? ' selected' : '') + '>' + esc(u.name) + ' (' + u.type + ')</option>').join('');
+    orgSel.onchange = function() {
+      statsOrgFilter = this.value;
+      statsLoaded = false;
+      loadTeamStats();
+    };
   }
 
   function renderPeriodBar() {
@@ -797,6 +843,22 @@
       { type: 'team', label: 'Team', color: '#10B981' },
     ];
 
+    // Count members per org unit (direct + descendants)
+    function getMemberCount(unitId) {
+      const descendantIds = [];
+      function collectDescendants(parentId) {
+        for (const u of orgUnits) {
+          if (u.parentId === parentId) { descendantIds.push(u.id); collectDescendants(u.id); }
+        }
+      }
+      collectDescendants(unitId);
+      const allIds = [unitId, ...descendantIds];
+      return allUsers.filter(u => allIds.includes(u.orgUnitId)).length;
+    }
+    function getDirectMembers(unitId) {
+      return allUsers.filter(u => u.orgUnitId === unitId);
+    }
+
     let html = '';
     for (const t of types) {
       const items = orgUnits.filter(u => u.type === t.type);
@@ -808,14 +870,27 @@
         for (const unit of items) {
           const parentName = unit.parentId ? (orgUnits.find(u => u.id === unit.parentId)?.name || '') : '';
           const childCount = orgUnits.filter(u => u.parentId === unit.id).length;
-          html += '<div class="org-card">';
+          const memberCount = getMemberCount(unit.id);
+          const directMembers = getDirectMembers(unit.id);
+          html += '<div class="org-card" style="flex-wrap:wrap">';
           html += '<div class="org-dot" style="background:' + t.color + '"></div>';
           html += '<div class="org-card-info"><div class="org-card-name">' + esc(unit.name) + '</div>';
           if (parentName) html += '<div class="org-card-parent">Parent: ' + esc(parentName) + '</div>';
           html += '</div>';
+          html += '<div style="display:flex;gap:8px;align-items:center">';
+          if (memberCount) html += '<span class="org-card-meta" style="background:#F1F5F9;padding:2px 8px;border-radius:10px;font-weight:600;color:#1E3A5F">' + memberCount + ' member' + (memberCount !== 1 ? 's' : '') + '</span>';
           if (childCount) html += '<span class="org-card-meta">' + childCount + ' sub-units</span>';
           html += '<button class="btn btn-sm btn-outline" onclick="window._editOrg(\'' + unit.id + '\')">Edit</button>';
           html += '<button class="btn btn-sm btn-danger" onclick="window._deleteOrg(\'' + unit.id + '\', \'' + esc(unit.name) + '\')">Delete</button>';
+          html += '</div>';
+          if (directMembers.length) {
+            html += '<div style="width:100%;padding:4px 0 0 16px;display:flex;flex-wrap:wrap;gap:4px">';
+            for (const m of directMembers) {
+              const roleColors = { owner: '#8B5CF6', manager: '#3B82F6', rep: '#1E3A5F' };
+              html += '<span style="font-size:11px;padding:2px 8px;border-radius:8px;background:' + (roleColors[m.role] || '#64748B') + '14;color:' + (roleColors[m.role] || '#64748B') + '">' + esc(m.fullName) + '</span>';
+            }
+            html += '</div>';
+          }
           html += '</div>';
         }
       }
@@ -841,6 +916,7 @@
     selectedRole = user ? user.role : (currentUser.role === 'manager' ? 'rep' : 'rep');
     updateRoleUI();
     updateManagerDropdown(user ? user.managerId : null);
+    updateOrgUnitDropdown(user ? user.orgUnitId : null);
     roleBtns.forEach(btn => {
       if (currentUser.role === 'manager') { btn.style.display = btn.dataset.role === 'rep' ? '' : 'none'; }
       else { btn.style.display = ''; }
@@ -862,6 +938,14 @@
       managers.map(a => '<option value="' + a.id + '"' + (a.id === currentManagerId ? ' selected' : '') + '>' + esc(a.fullName) + '</option>').join('');
   }
 
+  function updateOrgUnitDropdown(currentOrgUnitId) {
+    const sel = document.getElementById('formOrgUnit');
+    const typeOrder = { region: 1, area: 2, team: 3 };
+    const sorted = [...orgUnits].sort((a, b) => (typeOrder[a.type] || 9) - (typeOrder[b.type] || 9));
+    sel.innerHTML = '<option value="">None</option>' +
+      sorted.map(u => '<option value="' + u.id + '"' + (u.id === currentOrgUnitId ? ' selected' : '') + '>' + esc(u.name) + ' (' + u.type + ')</option>').join('');
+  }
+
   roleBtns.forEach(btn => { btn.addEventListener('click', () => { selectedRole = btn.dataset.role; updateRoleUI(); }); });
   document.getElementById('addUserBtn').addEventListener('click', () => openModal(null));
   document.getElementById('cancelBtn').addEventListener('click', closeModal);
@@ -874,10 +958,11 @@
     const phone = document.getElementById('formPhone').value.trim();
     const isActive = document.getElementById('formActive').checked;
     const managerId = document.getElementById('formManager').value || null;
+    const orgUnitId = document.getElementById('formOrgUnit').value || null;
     const errEl = document.getElementById('formError');
     errEl.style.display = 'none';
     if (!fullName || !email) { errEl.textContent = 'Full name and email are required'; errEl.style.display = 'block'; return; }
-    const body = { fullName, email, username, phone, role: selectedRole };
+    const body = { fullName, email, username, phone, role: selectedRole, orgUnitId };
     if (selectedRole === 'rep' && managerId) body.managerId = managerId;
     if (selectedRole !== 'rep') body.managerId = null;
     if (editingUserId) body.isActive = isActive;

@@ -73,8 +73,8 @@ export async function getLeadsByUserId(userId: string, role: string): Promise<an
   return getLeadsByUserRole(user);
 }
 
-// Admin leads: returns leads with rep info joined
-export async function getAdminLeads(currentUser: User): Promise<any[]> {
+// Admin leads: returns leads with rep info joined, optionally filtered by org unit
+export async function getAdminLeads(currentUser: User, orgUnitId?: string): Promise<any[]> {
   const roleLeads = await getLeadsByUserRole(currentUser);
   if (roleLeads.length === 0) return [];
 
@@ -82,19 +82,34 @@ export async function getAdminLeads(currentUser: User): Promise<any[]> {
   const visibleUsers = await getVisibleUsers(currentUser);
   const userMap = new Map(visibleUsers.map((u) => [u.id, u]));
 
-  return roleLeads.map((lead: any) => {
+  let filtered = roleLeads;
+  if (orgUnitId) {
+    const orgUserIds = await getUserIdsByOrgUnit(orgUnitId);
+    const orgUserSet = new Set(orgUserIds);
+    filtered = roleLeads.filter((lead: any) => orgUserSet.has(lead.userId));
+  }
+
+  return filtered.map((lead: any) => {
     const rep = userMap.get(lead.userId);
     return {
       ...lead,
       repName: rep?.fullName || "Unknown",
       repEmail: rep?.email || "",
+      repOrgUnitId: rep?.orgUnitId || null,
     };
   });
 }
 
-// Team stats: per-rep performance metrics
-export async function getTeamStats(currentUser: User): Promise<any[]> {
-  const visibleUsers = await getVisibleUsers(currentUser);
+// Team stats: per-rep performance metrics, optionally filtered by org unit
+export async function getTeamStats(currentUser: User, orgUnitId?: string): Promise<any[]> {
+  let visibleUsers = await getVisibleUsers(currentUser);
+
+  if (orgUnitId) {
+    const orgUserIds = await getUserIdsByOrgUnit(orgUnitId);
+    const orgUserSet = new Set(orgUserIds);
+    visibleUsers = visibleUsers.filter(u => orgUserSet.has(u.id));
+  }
+
   const repsAndManagers = visibleUsers.filter((u) => u.role === "rep" || u.role === "manager");
 
   // Get all leads for these users
@@ -147,6 +162,7 @@ export async function getTeamStats(currentUser: User): Promise<any[]> {
       role: user.role,
       isActive: user.isActive,
       managerId: user.managerId,
+      orgUnitId: user.orgUnitId,
       totalLeads,
       doorsKnocked,
       contacts,
@@ -213,6 +229,39 @@ export async function updateTerritory(id: string, data: any): Promise<any> {
 export async function deleteTerritory(id: string): Promise<boolean> {
   const result = await db.delete(territories).where(eq(territories.id, id)).returning();
   return result.length > 0;
+}
+
+// ========== ORG UNIT HELPERS ==========
+
+// Get all descendant org unit IDs for a given org unit (recursive)
+export async function getOrgUnitDescendantIds(orgUnitId: string): Promise<string[]> {
+  const all = await db.select().from(orgUnits);
+  const ids: string[] = [];
+  function collect(parentId: string) {
+    for (const unit of all) {
+      if (unit.parentId === parentId) {
+        ids.push(unit.id);
+        collect(unit.id);
+      }
+    }
+  }
+  collect(orgUnitId);
+  return ids;
+}
+
+// Get user IDs that belong to an org unit + all its descendants
+export async function getUserIdsByOrgUnit(orgUnitId: string): Promise<string[]> {
+  const descendantIds = await getOrgUnitDescendantIds(orgUnitId);
+  const allUnitIds = [orgUnitId, ...descendantIds];
+  const result = await db.select().from(users).where(inArray(users.orgUnitId, allUnitIds));
+  return result.map(u => u.id);
+}
+
+// Get users that belong to an org unit + all its descendants
+export async function getUsersByOrgUnit(orgUnitId: string): Promise<User[]> {
+  const descendantIds = await getOrgUnitDescendantIds(orgUnitId);
+  const allUnitIds = [orgUnitId, ...descendantIds];
+  return db.select().from(users).where(inArray(users.orgUnitId, allUnitIds));
 }
 
 // Org unit CRUD

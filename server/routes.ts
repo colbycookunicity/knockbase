@@ -213,6 +213,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (req.body.isActive !== undefined) updates.isActive = req.body.isActive;
       if (req.body.username) updates.username = req.body.username;
       if (req.body.managerId !== undefined) updates.managerId = req.body.managerId;
+      if (req.body.orgUnitId !== undefined) updates.orgUnitId = req.body.orgUnitId;
 
       const user = await storage.updateUser(targetId, updates);
       if (!user) {
@@ -321,11 +322,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ message: "Territory deleted" });
   });
 
-  // Admin: leads with rep info
+  // Admin: leads with rep info (optional orgUnitId filter)
   app.get("/api/admin/leads", requireOwnerOrAdmin, async (req, res) => {
     try {
       const currentUser = (req as any).currentUser;
-      const adminLeads = await storage.getAdminLeads(currentUser);
+      const orgUnitId = req.query.orgUnitId as string | undefined;
+      const adminLeads = await storage.getAdminLeads(currentUser, orgUnitId || undefined);
       res.json(adminLeads);
     } catch (err) {
       console.error("Admin leads error:", err);
@@ -333,11 +335,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Admin: team performance stats
+  // Admin: team performance stats (optional orgUnitId filter)
   app.get("/api/admin/team-stats", requireOwnerOrAdmin, async (req, res) => {
     try {
       const currentUser = (req as any).currentUser;
-      const stats = await storage.getTeamStats(currentUser);
+      const orgUnitId = req.query.orgUnitId as string | undefined;
+      const stats = await storage.getTeamStats(currentUser, orgUnitId || undefined);
       res.json(stats);
     } catch (err) {
       console.error("Team stats error:", err);
@@ -359,6 +362,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(lead);
     } catch (err) {
       console.error("Reassign lead error:", err);
+      res.status(500).json({ message: "Server error" });
+    }
+  });
+
+  // Org unit members
+  app.get("/api/org-units/:id/members", requireOwnerOrAdmin, async (req, res) => {
+    try {
+      const members = await storage.getUsersByOrgUnit(req.params.id as string);
+      res.json(members.map(sanitizeUser));
+    } catch (err) {
+      console.error("Org unit members error:", err);
       res.status(500).json({ message: "Server error" });
     }
   });
