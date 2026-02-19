@@ -284,8 +284,10 @@ export async function createCartWithAttributes(
     cartInput.attributes = customAttributes;
   }
 
-  if (customerEmail) {
-    cartInput.buyerIdentity = { email: customerEmail };
+  // Trim and validate email before sending to Shopify
+  const trimmedEmail = customerEmail?.trim();
+  if (trimmedEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+    cartInput.buyerIdentity = { email: trimmedEmail };
   }
 
   const query = `
@@ -326,7 +328,23 @@ export async function createCartWithAttributes(
     }
   `;
 
-  const data = await shopifyQuery(query, { input: cartInput });
+  let data = await shopifyQuery(query, { input: cartInput });
+
+  // If Shopify rejects the email (store customer account settings can reject
+  // valid emails), retry without buyerIdentity so the cart still gets created
+  if (data.cartCreate.userErrors?.length > 0) {
+    const emailError = data.cartCreate.userErrors.some(
+      (e: any) => e.field?.includes("email") || e.message?.toLowerCase().includes("email")
+    );
+    if (emailError && cartInput.buyerIdentity) {
+      console.warn(
+        `Shopify rejected email "${trimmedEmail}", retrying cart without buyerIdentity`
+      );
+      delete cartInput.buyerIdentity;
+      data = await shopifyQuery(query, { input: cartInput });
+    }
+  }
+
   if (data.cartCreate.userErrors?.length > 0) {
     throw new Error(data.cartCreate.userErrors[0].message);
   }
