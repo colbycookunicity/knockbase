@@ -362,6 +362,110 @@ function parseShopifyqlTable(tableData: any): { columns: any[]; rows: any[] } {
   return { columns, rows };
 }
 
+// POS Orders for a specific staff member - individual order drill-down
+export async function getPosStaffOrders(staffName: string, sinceDays: number = 7): Promise<any> {
+  const sinceDate = new Date();
+  sinceDate.setDate(sinceDate.getDate() - sinceDays);
+  const sinceISO = sinceDate.toISOString();
+
+  // Query orders from Shopify Admin API filtered by POS channel and staff
+  const query = `
+    query posOrders($query: String!, $first: Int!) {
+      orders(first: $first, query: $query, sortKey: CREATED_AT, reverse: true) {
+        edges {
+          node {
+            id
+            name
+            createdAt
+            displayFinancialStatus
+            displayFulfillmentStatus
+            totalPriceSet { shopMoney { amount currencyCode } }
+            subtotalPriceSet { shopMoney { amount currencyCode } }
+            totalDiscountsSet { shopMoney { amount currencyCode } }
+            totalTaxSet { shopMoney { amount currencyCode } }
+            customer {
+              id
+              firstName
+              lastName
+              email
+            }
+            lineItems(first: 10) {
+              edges {
+                node {
+                  title
+                  quantity
+                  originalTotalSet { shopMoney { amount currencyCode } }
+                  variant {
+                    title
+                    image { url altText }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  // Shopify search syntax for POS orders by staff
+  const searchQuery = `source_name:pos AND created_at:>='${sinceISO}' AND tag_not:draft`;
+  const data = await adminQuery(query, { query: searchQuery, first: 100 });
+
+  const orders = data.orders.edges.map((e: any) => {
+    const o = e.node;
+    return {
+      id: o.id,
+      name: o.name,
+      createdAt: o.createdAt,
+      financialStatus: o.displayFinancialStatus,
+      fulfillmentStatus: o.displayFulfillmentStatus,
+      totalPrice: o.totalPriceSet?.shopMoney?.amount,
+      subtotalPrice: o.subtotalPriceSet?.shopMoney?.amount,
+      totalDiscounts: o.totalDiscountsSet?.shopMoney?.amount,
+      totalTax: o.totalTaxSet?.shopMoney?.amount,
+      currencyCode: o.totalPriceSet?.shopMoney?.currencyCode,
+      customer: o.customer ? {
+        firstName: o.customer.firstName,
+        lastName: o.customer.lastName,
+        email: o.customer.email,
+      } : null,
+      lineItems: o.lineItems.edges.map((li: any) => ({
+        title: li.node.title,
+        quantity: li.node.quantity,
+        total: li.node.originalTotalSet?.shopMoney?.amount,
+        variantTitle: li.node.variant?.title,
+        imageUrl: li.node.variant?.image?.url,
+      })),
+    };
+  });
+
+  return { orders, staffName, sinceDays };
+}
+
+// POS Staff daily breakdown - timeseries for a single staff member
+export async function getPosStaffDailyBreakdown(staffName: string, sinceDays: number = 7): Promise<any> {
+  const shopifyql = `
+    FROM sales
+    SHOW orders,
+      gross_sales,
+      discounts,
+      net_sales,
+      taxes,
+      total_sales
+    WHERE sales_channel = 'Point of Sale'
+      AND staff_member_name = '${staffName.replace(/'/g, "\\'")}'
+    TIMESERIES day
+    WITH TOTALS
+    SINCE startOfDay(-${sinceDays}d) UNTIL today
+    ORDER BY day ASC
+    LIMIT 100
+  `;
+
+  const tableData = await runShopifyqlQuery(shopifyql);
+  return parseShopifyqlTable(tableData);
+}
+
 export async function getDraftOrder(id: string) {
   const query = `
     query getDraftOrder($id: ID!) {

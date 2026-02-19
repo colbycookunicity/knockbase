@@ -137,6 +137,12 @@ export default function AdminScreen() {
   const [posDays, setPosDays] = useState(7);
   const [posLoading, setPosLoading] = useState(false);
 
+  // POS drill-down state
+  const [expandedStaff, setExpandedStaff] = useState<string | null>(null);
+  const [staffOrders, setStaffOrders] = useState<any>(null);
+  const [staffDaily, setStaffDaily] = useState<any>(null);
+  const [staffDrillLoading, setStaffDrillLoading] = useState(false);
+
   // User form: shopify staff name
   const [formShopifyStaffName, setFormShopifyStaffName] = useState("");
 
@@ -193,6 +199,37 @@ export default function AdminScreen() {
       setPosLoading(false);
     }
   }, []);
+
+  const fetchStaffDrillDown = useCallback(async (staffName: string, days: number) => {
+    setStaffDrillLoading(true);
+    try {
+      const [ordersRes, dailyRes] = await Promise.all([
+        apiRequest("GET", `/api/admin/pos-orders?staff=${encodeURIComponent(staffName)}&days=${days}`),
+        apiRequest("GET", `/api/admin/pos-daily?staff=${encodeURIComponent(staffName)}&days=${days}`),
+      ]);
+      const ordersData = await ordersRes.json();
+      const dailyData = await dailyRes.json();
+      setStaffOrders(ordersData);
+      setStaffDaily(dailyData);
+    } catch (err) {
+      console.error("Failed to fetch staff drill-down:", err);
+      setStaffOrders(null);
+      setStaffDaily(null);
+    } finally {
+      setStaffDrillLoading(false);
+    }
+  }, []);
+
+  const toggleStaffExpand = useCallback((staffName: string) => {
+    if (expandedStaff === staffName) {
+      setExpandedStaff(null);
+      setStaffOrders(null);
+      setStaffDaily(null);
+    } else {
+      setExpandedStaff(staffName);
+      fetchStaffDrillDown(staffName, posDays);
+    }
+  }, [expandedStaff, posDays, fetchStaffDrillDown]);
 
   const fetchOrgUnits = useCallback(async () => {
     setOrgLoading(true);
@@ -1133,7 +1170,7 @@ export default function AdminScreen() {
           {([1, 7, 30, 90] as const).map((d) => (
             <Pressable
               key={d}
-              onPress={() => { setPosDays(d); fetchPosSales(d); }}
+              onPress={() => { setPosDays(d); fetchPosSales(d); setExpandedStaff(null); setStaffOrders(null); setStaffDaily(null); }}
               style={[
                 styles.periodBtn,
                 { backgroundColor: posDays === d ? "#10B981" : "transparent" },
@@ -1195,59 +1232,162 @@ export default function AdminScreen() {
                 const name = row.staff_member_name || "Unknown";
                 const linkedUser = staffUserMap.get(name.toLowerCase());
                 const initials = name.split(" ").map((w: string) => w[0]).join("").toUpperCase().slice(0, 2);
+                const isExpanded = expandedStaff === name;
 
                 return (
-                  <View key={idx} style={[styles.statsCard, { backgroundColor: theme.surface }]}>
-                    <View style={styles.statsCardHeader}>
-                      <View style={[styles.miniAvatar, { backgroundColor: linkedUser ? "#10B98120" : "#94A3B820" }]}>
-                        <Text style={{ fontSize: 12, fontFamily: "Inter_700Bold", color: linkedUser ? "#10B981" : "#94A3B8" }}>
-                          {initials}
-                        </Text>
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                          <Text style={[styles.statsRepName, { color: theme.text }]} numberOfLines={1}>
-                            {name}
+                  <View key={idx}>
+                    <Pressable
+                      onPress={() => toggleStaffExpand(name)}
+                      style={[styles.statsCard, { backgroundColor: theme.surface, borderLeftWidth: isExpanded ? 3 : 0, borderLeftColor: "#10B981" }]}
+                    >
+                      <View style={styles.statsCardHeader}>
+                        <View style={[styles.miniAvatar, { backgroundColor: linkedUser ? "#10B98120" : "#94A3B820" }]}>
+                          <Text style={{ fontSize: 12, fontFamily: "Inter_700Bold", color: linkedUser ? "#10B981" : "#94A3B8" }}>
+                            {initials}
                           </Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                            <Text style={[styles.statsRepName, { color: theme.text }]} numberOfLines={1}>
+                              {name}
+                            </Text>
+                            {linkedUser && (
+                              <View style={{ backgroundColor: "#D1FAE5", paddingHorizontal: 6, paddingVertical: 1, borderRadius: 6 }}>
+                                <Text style={{ fontSize: 9, color: "#059669", fontFamily: "Inter_600SemiBold" }}>Linked</Text>
+                              </View>
+                            )}
+                          </View>
                           {linkedUser && (
-                            <View style={{ backgroundColor: "#D1FAE5", paddingHorizontal: 6, paddingVertical: 1, borderRadius: 6 }}>
-                              <Text style={{ fontSize: 9, color: "#059669", fontFamily: "Inter_600SemiBold" }}>Linked</Text>
-                            </View>
+                            <Text style={[styles.statsRepMeta, { color: theme.textSecondary }]}>
+                              {linkedUser.email}
+                            </Text>
                           )}
                         </View>
-                        {linkedUser && (
-                          <Text style={[styles.statsRepMeta, { color: theme.textSecondary }]}>
-                            {linkedUser.email}
-                          </Text>
+                        <Ionicons
+                          name={isExpanded ? "chevron-up" : "chevron-down"}
+                          size={18}
+                          color={theme.textSecondary}
+                        />
+                      </View>
+                      <View style={styles.statsGrid}>
+                        <View style={styles.statBox}>
+                          <Text style={[styles.statBoxValue, { color: "#3B82F6" }]}>{row.orders || 0}</Text>
+                          <Text style={[styles.statBoxLabel, { color: theme.textSecondary }]}>Orders</Text>
+                        </View>
+                        <View style={styles.statBox}>
+                          <Text style={[styles.statBoxValue, { color: "#10B981" }]}>{formatCurrency(row.total_sales)}</Text>
+                          <Text style={[styles.statBoxLabel, { color: theme.textSecondary }]}>Total</Text>
+                        </View>
+                        <View style={styles.statBox}>
+                          <Text style={[styles.statBoxValue, { color: "#8B5CF6" }]}>{formatCurrency(row.net_sales)}</Text>
+                          <Text style={[styles.statBoxLabel, { color: theme.textSecondary }]}>Net</Text>
+                        </View>
+                        <View style={styles.statBox}>
+                          <Text style={[styles.statBoxValue, { color: "#F59E0B" }]}>{formatCurrency(row.average_order_value)}</Text>
+                          <Text style={[styles.statBoxLabel, { color: theme.textSecondary }]}>Avg</Text>
+                        </View>
+                        <View style={styles.statBox}>
+                          <Text style={[styles.statBoxValue, { color: "#EF4444" }]}>{formatCurrency(row.discounts)}</Text>
+                          <Text style={[styles.statBoxLabel, { color: theme.textSecondary }]}>Discounts</Text>
+                        </View>
+                        <View style={styles.statBox}>
+                          <Text style={[styles.statBoxValue, { color: "#64748B" }]}>{formatCurrency(row.taxes)}</Text>
+                          <Text style={[styles.statBoxLabel, { color: theme.textSecondary }]}>Taxes</Text>
+                        </View>
+                      </View>
+                      {!isExpanded && (
+                        <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: theme.textSecondary, textAlign: "center", marginTop: 6 }}>
+                          Tap to view all sales
+                        </Text>
+                      )}
+                    </Pressable>
+
+                    {/* Drill-down: daily breakdown + individual orders */}
+                    {isExpanded && (
+                      <View style={[styles.drillDownContainer, { backgroundColor: theme.surface, borderLeftWidth: 3, borderLeftColor: "#10B981" }]}>
+                        {staffDrillLoading ? (
+                          <View style={{ padding: 20, alignItems: "center" }}>
+                            <ActivityIndicator size="small" color="#10B981" />
+                            <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 8, fontFamily: "Inter_400Regular" }}>Loading sales...</Text>
+                          </View>
+                        ) : (
+                          <>
+                            {/* Daily breakdown */}
+                            {staffDaily?.rows && staffDaily.rows.length > 0 && (
+                              <View style={{ marginBottom: 12 }}>
+                                <Text style={[styles.drillDownSectionTitle, { color: theme.text }]}>
+                                  Daily Breakdown
+                                </Text>
+                                {staffDaily.rows
+                                  .filter((d: any) => d.day)
+                                  .map((d: any, i: number) => {
+                                    const dayLabel = new Date(d.day).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+                                    return (
+                                      <View key={i} style={[styles.dailyRow, { borderBottomColor: theme.border }]}>
+                                        <Text style={{ fontSize: 12, fontFamily: "Inter_500Medium", color: theme.text, width: 100 }}>{dayLabel}</Text>
+                                        <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: "#3B82F6", width: 50, textAlign: "center" }}>{d.orders || 0}</Text>
+                                        <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: "#10B981", flex: 1, textAlign: "right" }}>{formatCurrency(d.total_sales)}</Text>
+                                      </View>
+                                    );
+                                  })}
+                              </View>
+                            )}
+
+                            {/* Individual orders */}
+                            <Text style={[styles.drillDownSectionTitle, { color: theme.text }]}>
+                              Individual Orders ({staffOrders?.orders?.length || 0})
+                            </Text>
+                            {(!staffOrders?.orders || staffOrders.orders.length === 0) ? (
+                              <Text style={{ fontSize: 12, color: theme.textSecondary, fontFamily: "Inter_400Regular", paddingVertical: 8 }}>
+                                No individual POS orders found for this period.
+                              </Text>
+                            ) : (
+                              staffOrders.orders.map((order: any, oi: number) => {
+                                const orderDate = new Date(order.createdAt).toLocaleDateString("en-US", {
+                                  month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+                                });
+                                const statusColor = order.financialStatus === "PAID" ? "#10B981" :
+                                  order.financialStatus === "REFUNDED" ? "#EF4444" :
+                                  order.financialStatus === "PARTIALLY_REFUNDED" ? "#F59E0B" : "#64748B";
+
+                                return (
+                                  <View key={oi} style={[styles.orderCard, { backgroundColor: theme.background, borderColor: theme.border }]}>
+                                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                                        <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: theme.text }}>{order.name}</Text>
+                                        <View style={{ backgroundColor: statusColor + "20", paddingHorizontal: 6, paddingVertical: 1, borderRadius: 6 }}>
+                                          <Text style={{ fontSize: 9, fontFamily: "Inter_600SemiBold", color: statusColor }}>
+                                            {order.financialStatus}
+                                          </Text>
+                                        </View>
+                                      </View>
+                                      <Text style={{ fontSize: 15, fontFamily: "Inter_700Bold", color: "#10B981" }}>
+                                        {formatCurrency(parseFloat(order.totalPrice))}
+                                      </Text>
+                                    </View>
+                                    <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: theme.textSecondary, marginBottom: 4 }}>
+                                      {orderDate}
+                                      {order.customer ? ` \u2022 ${order.customer.firstName || ""} ${order.customer.lastName || ""}`.trim() : ""}
+                                      {order.customer?.email ? ` \u2022 ${order.customer.email}` : ""}
+                                    </Text>
+                                    {order.lineItems.map((li: any, li_idx: number) => (
+                                      <View key={li_idx} style={{ flexDirection: "row", justifyContent: "space-between", paddingVertical: 2 }}>
+                                        <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: theme.text, flex: 1 }} numberOfLines={1}>
+                                          {li.quantity}x {li.title}{li.variantTitle && li.variantTitle !== "Default Title" ? ` (${li.variantTitle})` : ""}
+                                        </Text>
+                                        <Text style={{ fontSize: 11, fontFamily: "Inter_500Medium", color: theme.textSecondary }}>
+                                          {formatCurrency(parseFloat(li.total))}
+                                        </Text>
+                                      </View>
+                                    ))}
+                                  </View>
+                                );
+                              })
+                            )}
+                          </>
                         )}
                       </View>
-                    </View>
-                    <View style={styles.statsGrid}>
-                      <View style={styles.statBox}>
-                        <Text style={[styles.statBoxValue, { color: "#3B82F6" }]}>{row.orders || 0}</Text>
-                        <Text style={[styles.statBoxLabel, { color: theme.textSecondary }]}>Orders</Text>
-                      </View>
-                      <View style={styles.statBox}>
-                        <Text style={[styles.statBoxValue, { color: "#10B981" }]}>{formatCurrency(row.total_sales)}</Text>
-                        <Text style={[styles.statBoxLabel, { color: theme.textSecondary }]}>Total</Text>
-                      </View>
-                      <View style={styles.statBox}>
-                        <Text style={[styles.statBoxValue, { color: "#8B5CF6" }]}>{formatCurrency(row.net_sales)}</Text>
-                        <Text style={[styles.statBoxLabel, { color: theme.textSecondary }]}>Net</Text>
-                      </View>
-                      <View style={styles.statBox}>
-                        <Text style={[styles.statBoxValue, { color: "#F59E0B" }]}>{formatCurrency(row.average_order_value)}</Text>
-                        <Text style={[styles.statBoxLabel, { color: theme.textSecondary }]}>Avg</Text>
-                      </View>
-                      <View style={styles.statBox}>
-                        <Text style={[styles.statBoxValue, { color: "#EF4444" }]}>{formatCurrency(row.discounts)}</Text>
-                        <Text style={[styles.statBoxLabel, { color: theme.textSecondary }]}>Discounts</Text>
-                      </View>
-                      <View style={styles.statBox}>
-                        <Text style={[styles.statBoxValue, { color: "#64748B" }]}>{formatCurrency(row.taxes)}</Text>
-                        <Text style={[styles.statBoxLabel, { color: theme.textSecondary }]}>Taxes</Text>
-                      </View>
-                    </View>
+                    )}
                   </View>
                 );
               })
@@ -2022,6 +2162,33 @@ const styles = StyleSheet.create({
   },
   teamTotalValue: { fontSize: 22, fontFamily: "Inter_700Bold" },
   teamTotalLabel: { fontSize: 10, fontFamily: "Inter_500Medium", marginTop: 2, textTransform: "uppercase" as const },
+
+  // POS drill-down
+  drillDownContainer: {
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 2,
+    marginTop: -1,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+  },
+  drillDownSectionTitle: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+    marginBottom: 8,
+  },
+  dailyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 6,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  orderCard: {
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 6,
+    borderWidth: 1,
+  },
 
   // Organization tab
   orgDescription: {

@@ -339,4 +339,18 @@ export async function seedAdminUser(): Promise<void> {
     await updateUser(existing.id, { role: "owner" });
     console.log("Updated colby.cook@unicity.com to owner role");
   }
+
+  // Seed Walter Portillo as manager linked to Shopify POS staff "Walter"
+  const walter = await getUserByEmail("walter.portillo@unicity.com");
+  if (!walter) {
+    await createUser({
+      username: "walter",
+      fullName: "Walter Portillo",
+      role: "manager",
+      email: "walter.portillo@unicity.com",
+      phone: "",
+      shopifyStaffName: "Walter",
+    });
+    console.log("Manager user created (email: walter.portillo@unicity.com, shopifyStaffName: Walter)");
+  }
 }

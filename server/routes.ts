@@ -475,6 +475,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // POS Orders drill-down by staff name (admin view)
+  app.get("/api/admin/pos-orders", requireOwnerOrAdmin, async (req, res) => {
+    try {
+      const staffName = req.query.staff as string;
+      if (!staffName) {
+        return res.status(400).json({ message: "staff query parameter is required" });
+      }
+      const days = parseInt(req.query.days as string) || 7;
+      const data = await shopifyAdmin.getPosStaffOrders(staffName, days);
+      res.json(data);
+    } catch (err: any) {
+      console.error("POS orders error:", err);
+      res.status(500).json({ message: err.message || "Failed to fetch POS orders" });
+    }
+  });
+
+  // POS Staff daily breakdown (admin view)
+  app.get("/api/admin/pos-daily", requireOwnerOrAdmin, async (req, res) => {
+    try {
+      const staffName = req.query.staff as string;
+      if (!staffName) {
+        return res.status(400).json({ message: "staff query parameter is required" });
+      }
+      const days = parseInt(req.query.days as string) || 7;
+      const data = await shopifyAdmin.getPosStaffDailyBreakdown(staffName, days);
+      res.json(data);
+    } catch (err: any) {
+      console.error("POS daily error:", err);
+      res.status(500).json({ message: err.message || "Failed to fetch POS daily data" });
+    }
+  });
+
   app.get("/api/shopify/products", requireAuth, async (req, res) => {
     try {
       const first = parseInt(req.query.first as string) || 20;
